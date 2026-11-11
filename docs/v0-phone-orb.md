@@ -1,16 +1,17 @@
 # 手机悬浮球与入网（v0 起点）
 
-> 状态：Draft（2026-11-10），从 dsh-orb-cordis 的计划文档摘出，供本仓库独立开发。
+> 状态：Draft（2026-11-11 同步），从 dsh-orb-cordis 的计划文档摘出，供本仓库独立开发。
 > 上游代码：https://github.com/ccch1mneyyy/dsh-Go （AGPL-3.0）。本仓库 `main` 是 `8f31b2ed` 的一份快照，不再包含那之前的 1250 次提交。`upstream` 远程还在，需要对照上游时再 `git fetch`。
 > 快照里去掉了用不到的内容：界面回归截图（`app/test/**/goldens`）、官网（`site/home`）、插件市场（`market`）、分享页部署（`services`）、论坛主题（`infra`）、文档配图（`docs/assets`）。App、本机引擎、构建脚本、`packages/`、`sdk/`、`examples/` 都保留。
 > 互联接口以 dsh-mesh 仓库的 `docs/contract-v1.md` 为准。
 > 应用改名、换包名、换图标在对外分发前做；内部开发先沿用上游。
+> 本文是 dsh-orb-cordis 仓库 `docs/17-implementation-plan.md` 第 5、6 节的同步副本；文中的 14–19 均指该仓库 `docs/` 下的同名文档，与 17 冲突时以 17 为准。
 
 ## 5. 工作流 A：手机端悬浮球（`dsh-orb-android` 仓库）
 
 ### 5.1 现状（fork 基线，已核实）
 
-对照的上游版本是 dsh-Go `1.0.14`（本仓库当前 `main`）：
+`/tmp/dshgo`（dsh-Go `1.0.14`）：
 
 | 能力 | 文件 | 现状 |
 |---|---|---|
@@ -83,7 +84,7 @@
 
 ### 5.3 后台：dsh-Go 标准模式
 
-- 工具名 `background_agent`（另有 `_status`、`_stop`），由手机仓库自己的小包 `@dsh-orb-android/background-agent` 提供，不依赖本仓库。写法参照本仓库 `code_agent` 的派发与完成通知逻辑（`packages/computer-use/src/code-agent.ts`、`code-agent-completion.ts`）。可以照着重写，也可以拷贝后保留 MIT 声明。区别有两点：目标 preset = `standard`；**不挂 `attachUnattendedCodeAgent`**（`code_agent` 写死目标 `desktop` 并自动放行，见 `code-agent.ts:353`）。本仓库的 `code_agent` 不动。
+- 工具名 `background_agent`（另有 `_status`、`_stop`），由手机仓库自己的小包 `@dsh-orb-android/background-agent` 提供，不依赖dsh-orb-cordis 仓库。写法参照dsh-orb-cordis 仓库 `code_agent` 的派发与完成通知逻辑（`packages/computer-use/src/code-agent.ts`、`code-agent-completion.ts`）。可以照着重写，也可以拷贝后保留 MIT 声明。区别有两点：目标 preset = `standard`；**不挂 `attachUnattendedCodeAgent`**（`code_agent` 写死目标 `desktop` 并自动放行，见 `code-agent.ts:353`）。dsh-orb-cordis 仓库的 `code_agent` 不动。
 - 不拷贝 `computer-use` 包本身：它带 macOS/Windows 原生后端，在 PRoot 里加载不了。只拷派发、完成通知这两块纯 JS 逻辑。
 - 后台会话的审批与提问不自动处理：dsh-Go 已有「等审批/等回答」系统通知（`ChatNotifier`）；Orb 面板的任务卡显示「等待确认」，点开可在面板里答（5.5）。
 - **屏幕共用**：标准模式也继承了 `mcp__phone__*`。派发时在任务正文写明「后台任务，除非任务本身需要，不要操作手机屏幕」。即使后台去操作，dsh-Go 也保证同一时间只有一个会话占主屏，另一方等 30 秒后拿到可读错误，Orb 把这句原因告诉用户。
@@ -166,7 +167,7 @@
 
 ### 5.8 退出标准
 
-对应 [16-v0-plan.md](16-v0-plan.md) 7.2 的 7 条；额外加：
+对应 `16-v0-plan.md` 7.2 的 7 条；额外加：
 
 - `orb-phone` 会话的工具清单与 5.2 表中 A4 一行一致。
 - 截图里不出现球和面板（窗口 id 集合 + 像素比对）。
@@ -208,7 +209,7 @@
 ### 6.4 手机作为被调用端
 
 - 其他设备派来的会话跑 dsh-Go 的 `standard` preset。它会继承 `mcp__phone__*`，所以要拦截。
-- **屏幕操作拦截（D-12）**：`dsh-mesh` 的 `packages/mesh/guard.ts` 在应用级挂 `ctx.tools.guard`（本仓库 `code-agent-registry.ts:122` 用的是同一机制）。Host 侧 bridge 记录由远程 peer `session/create` 或 `session/prompt` 触发的会话；这些会话调用配置 `remoteToolGuard` 里的工具（手机填 `mcp__phone__*`）时，如果偏好 `allowGuardedTools` 关着，就拒绝并返回「这台手机不允许其他设备操作屏幕」。手机互联页把 `allowGuardedTools` 显示为「允许其他设备操作本机屏幕」。
+- **屏幕操作拦截（D-12）**：`dsh-mesh` 的 `packages/mesh/guard.ts` 在应用级挂 `ctx.tools.guard`（dsh-orb-cordis 仓库 `code-agent-registry.ts:122` 用的是同一机制）。Host 侧 bridge 记录由远程 peer `session/create` 或 `session/prompt` 触发的会话；这些会话调用配置 `remoteToolGuard` 里的工具（手机填 `mcp__phone__*`）时，如果偏好 `allowGuardedTools` 关着，就拒绝并返回「这台手机不允许其他设备操作屏幕」。手机互联页把 `allowGuardedTools` 显示为「允许其他设备操作本机屏幕」。D-5 之后远程本来就只能 prompt 自己创建的会话，所以「按会话创建者记录」这条判定是充分的，不需要按轮次再判一次。
 - 开关打开时：dsh-Go 的控制条照常显示，并加一行「来自 <设备名> 的任务正在操作手机」；`SafetyGate` 不变，敏感操作仍在手机上确认。
 - **手机文件作为附件**：打开「访问手机文件」后，后台 Agent 可用 Shell 在 `/sdcard/DCIM/…` 找照片，拷到 `.mesh-out/<taskId>/`，由发起端按 4.5 的流程取回。全程不操作手机界面。
 - **保活**：引擎靠 `DshService` 前台服务；被系统回收时手机就是离线，各端 30 秒内显示。A5 验证锁屏 10 分钟后仍在线。
@@ -224,4 +225,4 @@
 
 ### 6.6 退出标准
 
-对应 [16-v0-plan.md](16-v0-plan.md) 7.3 的 6 条，并在 5 台同时在线时回归 7.1。另加：全新安装的手机只在互联页粘贴配对串或扫码、点连接，不重启引擎，15 秒内显示已连接和其他设备。
+对应 `16-v0-plan.md` 7.3 的 6 条，并在 5 台同时在线时回归 7.1.2。另加：全新安装的手机只在互联页粘贴配对串或扫码、点连接，不重启引擎，15 秒内显示已连接和其他设备。
