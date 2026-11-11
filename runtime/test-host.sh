@@ -146,7 +146,20 @@ for rel, expected in terminal.items():
     got = hashlib.sha256(open(os.path.join(root, "opt/dsh", rel), "rb").read()).hexdigest()
     assert got == expected, (rel, got)
 assert os.path.isfile(os.path.join(root, "opt/dsh-go/dsh-go-bridge/lib/client.js"))
-assert "/opt/dsh-go/dsh-go-bridge/lib/index.js" in open(os.path.join(root, "etc/dsh-app/dsh-web.patch.yml")).read()
+overlay = open(os.path.join(root, "etc/dsh-app/dsh-web.patch.yml")).read()
+assert "/opt/dsh-go/dsh-go-bridge/lib/index.js" in overlay
+# Third-party plugin bundles: every manifest entry must be present in the rootfs and registered
+# by absolute path, after the shared rows, inside the same root insert list.
+for plugin in m.get("dshPlugins") or []:
+    base = plugin["rootfsPath"].lstrip("/")
+    assert os.path.isfile(os.path.join(root, base, plugin["entry"])), plugin
+    assert len(plugin["sha256"]) == 64, plugin
+    app = overlay.index("# --- app plugin rows ---")
+    assert plugin["rootfsPath"] + "/" + plugin["entry"] in overlay[app:], plugin
+    # Path-loaded plugins resolve DSH peer packages through the same node_modules tree.
+    seam = os.path.join(root, "opt/dsh-go/plugins/node_modules")
+    assert os.path.islink(seam), seam
+    assert os.path.realpath(seam) == os.path.realpath(os.path.join(root, "opt/dsh/node_modules")), seam
 PY
 rm -rf "$ROOT/tmp/route-probe"; mkdir -p "$ROOT/tmp/route-probe"
 cp "$HERE/tests/route-probe/"* "$HERE/tests/route-guard.mjs" "$ROOT/tmp/route-probe/"

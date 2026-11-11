@@ -8,6 +8,20 @@
 #   COMPRESS=gz runtime/build-runtime.sh     # .tar.gz instead of .tar.xz
 #   RUNTIME_OUT=/path runtime/build-runtime.sh   # stage outputs outside runtime/out (not packaged)
 #
+#   # bundle a third-party plugin tgz (default: the local tooling/plugin-probe fixture)
+#   DSH_PLUGIN_NAME=@dsh-mesh/plugin DSH_PLUGIN_VERSION=0.1.0 \
+#   DSH_PLUGIN_URL=https://.../plugin.tgz DSH_PLUGIN_SHA256=<sha256> \
+#   DSH_PLUGIN_ENTRY=lib/index.js runtime/build-runtime.sh arm64-v8a
+#   # build without a plugin: DSH_PLUGIN_URL=
+#   # check the plugin path only (fetch/verify/extract/render overlay; no rootfs):
+#   RUNTIME_PLUGIN_CHECK=1 runtime/build-runtime.sh
+#
+# The plugin tarball is verified with the same sha256-checked fetch as every other input,
+# unpacked to $DSH_PLUGIN_PREFIX/$DSH_PLUGIN_NAME inside the PRoot rootfs, and registered as an
+# application-level plugin by the dsh-go-bridge overlay (runtime/bridge/dsh-go-bridge/cordis.patch.yml).
+# Its hash and identity are part of runtimeVersion, so a plugin change rebuilds the engine.
+# See tooling/plugin-probe/README.md for the Linux/device verification steps.
+#
 # The DSH tree is patched with runtime/patches/*.diff (pinned per DSH version in
 # runtime/patches/pins.json; an unvetted DSH version fails the build) and the dsh-go-bridge
 # plugin (runtime/bridge/dsh-go-bridge) is installed at /opt/dsh-go/dsh-go-bridge and loaded by
@@ -29,6 +43,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
 CACHE="$HERE/.cache"
 WORK="$HERE/.work"
 OUT="${RUNTIME_OUT:-$HERE/out}"   # the app build reads runtime/out; RUNTIME_OUT stages a build elsewhere
@@ -56,6 +71,21 @@ XZ_THREADS="${XZ_THREADS:-4}"       # each xz -6 worker needs ~100 MiB; output d
 PRUNE_DEV_METADATA="${PRUNE_DEV_METADATA:-1}"   # drop *.map / *.d.ts from node_modules
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1767225600}"  # 2026-01-01T00:00:00Z, fixed tar mtimes
 
+# ---- third-party DSH plugin tgz (B0 spike; see tooling/plugin-probe/README.md) ----
+# One optional plugin tarball is verified, unpacked under $DSH_PLUGIN_PREFIX/$DSH_PLUGIN_NAME in
+# the rootfs, and registered by absolute path in the app overlay. Defaults point at the local
+# fixture so a dev build is network-free; `DSH_PLUGIN_URL=` explicitly builds without a plugin.
+# A release replaces NAME/VERSION/URL/SHA256/ENTRY with the real tarball (e.g. @dsh-mesh/plugin).
+DSH_PLUGIN_NAME="${DSH_PLUGIN_NAME:-@dsh-orb-android/plugin-probe}"
+DSH_PLUGIN_VERSION="${DSH_PLUGIN_VERSION:-0.1.0}"
+DSH_PLUGIN_ENTRY="${DSH_PLUGIN_ENTRY:-lib/index.js}"
+DSH_PLUGIN_PREFIX="${DSH_PLUGIN_PREFIX:-/opt/dsh-go/plugins}"
+DSH_PLUGIN_PREFIX="${DSH_PLUGIN_PREFIX%/}"
+DSH_PLUGIN_TGZ="${DSH_PLUGIN_TGZ:-$REPO/tooling/plugin-probe/dist/dsh-orb-android-plugin-probe-$DSH_PLUGIN_VERSION.tgz}"
+DSH_PLUGIN_URL_EXPLICIT="${DSH_PLUGIN_URL+x}"          # distinguishes "unset" from "explicitly empty"
+DSH_PLUGIN_URL="${DSH_PLUGIN_URL-file://$DSH_PLUGIN_TGZ}"
+DSH_PLUGIN_SHA256="${DSH_PLUGIN_SHA256:-}"             # required for http(s); file:// may omit
+
 UBUNTU_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release"
 NODE_MIRROR="https://npmmirror.com/mirrors/node"
 NPM_REGISTRY="https://registry.npmmirror.com"
@@ -67,6 +97,9 @@ PBS_MIRROR="https://registry.npmmirror.com/-/binary/python-build-standalone"
 
 # sha256 pins, cross-checked against cdimage.ubuntu.com / nodejs.org / the Termux Packages
 # index. The mirror's SHA256SUMS / SHASUMS256.txt are verified as well.
+# A full build needs bash 4+ (associative arrays) and runs on the Linux x86_64 build host;
+# bash 3.2 (macOS) can still run RUNTIME_PLUGIN_CHECK=1, which never reads these pins.
+if (( BASH_VERSINFO[0] >= 4 )); then
 declare -A PIN=(
   [ubuntu-base-24.04.5-base-arm64.tar.gz]=a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2
   [ubuntu-base-24.04.5-base-amd64.tar.gz]=e77b6f10c2590cef872b33ee9f635a0e3fd1f57fb074c0e52b5c7f56147a0c86
@@ -83,12 +116,17 @@ declare -A PIN=(
   # GPL-2.0 source of the proot binary (same archive Termux's build recipe pins); used for COPYING.
   [proot-v5.1.107.98.zip]=9de61bddd6f5016d065e2755b72ff4747290e5f992562f031785b107b51d02ba
 )
+else
+  PIN=()
+fi
 
 log() { printf '\033[1;34m[runtime %s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*" >&2; }
 die() { printf '\033[1;31m[runtime] error:\033[0m %s\n' "$*" >&2; exit 1; }
 sha256() { sha256sum "$1" | cut -d' ' -f1; }
 
 for tool in curl sha256sum python3 tar xz; do
+  # RUNTIME_PLUGIN_CHECK=1 only fetches/unpacks the plugin tgz and renders the overlay.
+  if [[ "$tool" == xz && "${RUNTIME_PLUGIN_CHECK:-0}" == 1 ]]; then continue; fi
   command -v "$tool" >/dev/null || die "missing host tool: $tool"
 done
 
@@ -110,6 +148,79 @@ fetch() {
 pin_of() {
   local name="$1"
   if [[ -n "${PIN[$name]:-}" ]]; then printf '%s' "${PIN[$name]}"; fi
+}
+
+# Resolves the optional third-party plugin tarball once. Sets PLUGIN_ENABLED, PLUGIN_TGZ_CACHE,
+# PLUGIN_SHA and PLUGIN_ROOT. A missing default fixture disables the plugin (so a build that did
+# not ask for one still works); a missing explicitly configured source is an error.
+plugin_setup() {
+  PLUGIN_ENABLED=0; PLUGIN_TGZ_CACHE=""; PLUGIN_SHA=""; PLUGIN_ROOT=""
+  if [[ -z "$DSH_PLUGIN_URL" ]]; then
+    log "app plugin: disabled (DSH_PLUGIN_URL is empty)"
+    return 0
+  fi
+  [[ "$DSH_PLUGIN_NAME" =~ ^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$ ]] \
+    || die "DSH_PLUGIN_NAME is not a valid npm package name: $DSH_PLUGIN_NAME"
+  [[ "$DSH_PLUGIN_VERSION" =~ ^[A-Za-z0-9._+-]+$ ]] \
+    || die "DSH_PLUGIN_VERSION is empty or has unsupported characters: $DSH_PLUGIN_VERSION"
+  [[ -n "$DSH_PLUGIN_ENTRY" && "$DSH_PLUGIN_ENTRY" != /* && "/$DSH_PLUGIN_ENTRY/" != *"/../"* ]] \
+    || die "DSH_PLUGIN_ENTRY must be a relative path without '..': $DSH_PLUGIN_ENTRY"
+  [[ "$DSH_PLUGIN_PREFIX" == /opt/dsh-go/* ]] \
+    || die "DSH_PLUGIN_PREFIX must stay inside the app-owned /opt/dsh-go tree: $DSH_PLUGIN_PREFIX"
+  PLUGIN_ROOT="$DSH_PLUGIN_PREFIX/$DSH_PLUGIN_NAME"
+
+  local want
+  case "$DSH_PLUGIN_URL" in
+    file://*)
+      local src="${DSH_PLUGIN_URL#file://}"
+      if [[ ! -f "$src" ]]; then
+        if [[ -z "$DSH_PLUGIN_URL_EXPLICIT" ]]; then
+          log "app plugin: fixture not built ($src); run tooling/build-plugin-probe.sh (building without a bundled plugin)"
+          return 0
+        fi
+        die "plugin tarball not found: $src"
+      fi
+      want="${DSH_PLUGIN_SHA256:-$(sha256 "$src")}"
+      ;;
+    https://*|http://*)
+      [[ -n "$DSH_PLUGIN_SHA256" ]] \
+        || die "DSH_PLUGIN_SHA256 is required when DSH_PLUGIN_URL is a network URL"
+      want="$DSH_PLUGIN_SHA256"
+      ;;
+    *)
+      die "DSH_PLUGIN_URL must be file://, http:// or https://: $DSH_PLUGIN_URL"
+      ;;
+  esac
+
+  local cache_name="${DSH_PLUGIN_NAME//\//__}"
+  PLUGIN_TGZ_CACHE="$CACHE/plugins/${cache_name}-${DSH_PLUGIN_VERSION}.tgz"
+  fetch "$DSH_PLUGIN_URL" "$PLUGIN_TGZ_CACHE" "$want"
+  PLUGIN_SHA="$(sha256 "$PLUGIN_TGZ_CACHE")"
+  [[ "$PLUGIN_SHA" == "$want" ]] || die "plugin tarball sha256 is $PLUGIN_SHA, expected $want"
+  PLUGIN_ENABLED=1
+  log "app plugin: $DSH_PLUGIN_NAME@$DSH_PLUGIN_VERSION sha256=$PLUGIN_SHA -> $PLUGIN_ROOT"
+}
+
+# RUNTIME_PLUGIN_CHECK=1: the plugin half of the build without downloading Ubuntu/Node/DSH.
+# Extracts the verified tarball and renders the exact overlay `assemble` would ship.
+plugin_check() {
+  local work="$WORK/plugin-check"
+  rm -rf "$work"; mkdir -p "$work"
+  if [[ "$PLUGIN_ENABLED" != 1 ]]; then
+    log "plugin check: no plugin configured (DSH_PLUGIN_URL is empty or the fixture is absent)"
+    return 0
+  fi
+  "${PY[@]}" extract-plugin --tgz "$PLUGIN_TGZ_CACHE" --sha256 "$PLUGIN_SHA" \
+    --name "$DSH_PLUGIN_NAME" --version "$DSH_PLUGIN_VERSION" --entry "$DSH_PLUGIN_ENTRY" \
+    --prefix "$DSH_PLUGIN_PREFIX" --out "$work/unpacked" --out-json "$work/plugin.json" >&2
+  "${PY[@]}" render-overlay --bridge --pnpm \
+    --plugin "$DSH_PLUGIN_NAME=$work/unpacked" \
+    --plugin-entry "$DSH_PLUGIN_NAME=$DSH_PLUGIN_ENTRY" \
+    --plugin-sha256 "$DSH_PLUGIN_NAME=$PLUGIN_SHA" \
+    --plugin-prefix "$DSH_PLUGIN_PREFIX" \
+    --runtime-info '{"runtimeVersion":"plugin-check"}' \
+    --out "$work/dsh-web.patch.yml" >&2
+  log "plugin check: unpacked $work/unpacked; overlay $work/dsh-web.patch.yml"
 }
 
 # ---------------------------------------------------------------------------
@@ -395,15 +506,32 @@ PYEOF
   local pnpm_prefix="$work/pnpm-prefix"
   install_pnpm "$npm_cpu" "$pnpm_prefix"
 
+  # -- third-party plugin tgz: verified again against the build's sha256, then unpacked --
+  local -a plugin_args=()
+  if [[ "$PLUGIN_ENABLED" == 1 ]]; then
+    local plugin_dir="$work/plugins/${DSH_PLUGIN_NAME//\//__}"
+    rm -rf "$plugin_dir"
+    "${PY[@]}" extract-plugin --tgz "$PLUGIN_TGZ_CACHE" --sha256 "$PLUGIN_SHA" \
+      --name "$DSH_PLUGIN_NAME" --version "$DSH_PLUGIN_VERSION" --entry "$DSH_PLUGIN_ENTRY" \
+      --prefix "$DSH_PLUGIN_PREFIX" --out "$plugin_dir" --out-json "$work/plugin.json" >&2
+    plugin_args=(--plugin "$DSH_PLUGIN_NAME=$plugin_dir"
+                 --plugin-entry "$DSH_PLUGIN_NAME=$DSH_PLUGIN_ENTRY"
+                 --plugin-sha256 "$DSH_PLUGIN_NAME=$PLUGIN_SHA"
+                 --plugin-prefix "$DSH_PLUGIN_PREFIX")
+  fi
+
   # -- runtimeVersion: hash of every input + the recipe itself --
   local lockfile="$LOCKS/dsh-$DSH_VERSION/package-lock.json"
   local pnpm_lockfile="$LOCKS/pnpm-$PNPM_VERSION/package-lock.json"
   local inputs_sha
   inputs_sha="$( {
       echo "$RUNTIME_REVISION $abi $DSH_VERSION $NODE_VERSION $PNPM_VERSION $UBUNTU_VERSION $COMPRESS $XZ_PRESET $PRUNE_DEV_METADATA $SOURCE_DATE_EPOCH"
+      # Plugin identity and bytes are engine inputs: a new version/content changes runtimeVersion.
+      echo "plugin ${PLUGIN_ENABLED} ${DSH_PLUGIN_NAME} ${DSH_PLUGIN_VERSION} ${DSH_PLUGIN_ENTRY} ${DSH_PLUGIN_PREFIX} ${PLUGIN_SHA}"
       sha256 "$base"; sha256 "$node"; sha256 "$python"; sha256sum "${extra_debs[@]}" | cut -d' ' -f1
       sha256 "$proot_deb"; sha256 "$talloc_deb"; sha256 "$shmem_deb"
       sha256 "$lockfile"; sha256 "$pnpm_lockfile"; sha256 "$HERE/build-runtime.sh"; sha256 "$HERE/lib/rtbuild.py"
+      if [[ "$PLUGIN_ENABLED" == 1 ]]; then sha256 "$PLUGIN_TGZ_CACHE"; fi
       (cd "$HERE" && find patches bridge boot direct -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
     } | sha256sum | cut -c1-12 )"
   local runtime_version="${RUNTIME_REVISION}-dsh${DSH_VERSION}-node${NODE_VERSION}-ubuntu${UBUNTU_VERSION}-${inputs_sha}"
@@ -419,7 +547,7 @@ PYEOF
   "${PY[@]}" assemble --abi "$abi" --base "$base" --node "$node" --dsh-prefix "$prefix" --pnpm-prefix "$pnpm_prefix" \
     --out "$archive" --report "$out/build-report.json" --runtime-info "$runtime_info" \
     --compress "$COMPRESS" --xz-preset "$XZ_PRESET" --threads "$XZ_THREADS" --epoch "$SOURCE_DATE_EPOCH" "${prune[@]}" \
-    "${extra_debs[@]/#/--deb=}" --python "$python" --bridge "$bridge"
+    "${extra_debs[@]/#/--deb=}" --python "$python" --bridge "$bridge" "${plugin_args[@]}"
 
   local versions
   versions="$(printf '{"runtimeVersion":"%s","dshVersion":"%s","nodeVersion":"%s","pnpmVersion":"%s","ubuntuVersion":"%s","prootVersion":"%s","tallocVersion":"%s","androidShmemVersion":"%s","dshPatches":%s,"dshGoBridge":"%s","build":{"inputsSha256_12":"%s","ubuntuBaseSha256":"%s","nodeSha256":"%s","dshLockSha256":"%s","pnpmIntegrity":"%s","sourceDateEpoch":%s}}' \
@@ -457,7 +585,7 @@ for abi in ("x86_64", "arm64-v8a"):
     m = json.load(open(p))
     index["abis"][abi] = {k: m.get(k) for k in (  # .get: another ABI may still hold an older build
         "runtimeVersion", "rootfs", "rootfsSha256", "rootfsBytes", "uncompressedBytes", "entries",
-        "dshVersion", "nodeVersion", "pnpmVersion", "ubuntuVersion", "prootVersion")}
+        "dshVersion", "nodeVersion", "pnpmVersion", "ubuntuVersion", "prootVersion", "dshPlugins")}
     index["abis"][abi]["jniLibs"] = {n: {"sha256": v["sha256"], "bytes": v["bytes"]} for n, v in m["jniLibs"].items()}
 json.dump(index, open(os.path.join(out, "manifest.json"), "w"), indent=2)
 print("wrote " + os.path.join(out, "manifest.json"))
@@ -468,6 +596,14 @@ main() {
   local -a abis=("$@")
   [[ ${#abis[@]} -gt 0 ]] || abis=(x86_64 arm64-v8a)
   mkdir -p "$CACHE" "$WORK" "$OUT"
+  if [[ "${RUNTIME_PLUGIN_CHECK:-0}" != 1 ]] && (( BASH_VERSINFO[0] < 4 )); then
+    die "a full runtime build needs bash 4+ (associative arrays); run it on the Linux x86_64 build host"
+  fi
+  plugin_setup
+  if [[ "${RUNTIME_PLUGIN_CHECK:-0}" == 1 ]]; then
+    plugin_check
+    return 0
+  fi
   local abi
   for abi in "${abis[@]}"; do build_abi "$abi"; done
   write_index

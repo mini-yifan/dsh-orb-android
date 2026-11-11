@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-orb-android/plugin-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "B0 spike fixture: proves a third-party DSH plugin tgz can be unpacked into the Android runtime and loaded by the local engine.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.9"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

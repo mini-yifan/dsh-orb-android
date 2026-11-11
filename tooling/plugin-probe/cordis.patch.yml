@@ -1,0 +1,6 @@
+# Installable form (`dsh plugin add <tgz>`). The dsh-app runtime does not read this file: it
+# unpacks the tarball under /opt/dsh-go/plugins and registers the entry by path from
+# /etc/dsh-app/dsh-web.patch.yml. This row makes the same tarball usable on a normal DSH host.
+- insert:
+    - id: plugin-probe
+      name: '@dsh-orb-android/plugin-probe'

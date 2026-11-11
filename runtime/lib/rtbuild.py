@@ -13,6 +13,7 @@ import json
 import lzma
 import os
 import posixpath
+import re
 import shutil
 import stat
 import struct
@@ -28,6 +29,18 @@ NPMJS = "https://registry.npmjs.org/"
 DSH_WEB_PATCH = "/etc/dsh-app/dsh-web.patch.yml"
 # Where runtime/bridge/dsh-go-bridge lands in the rootfs (loaded by absolute path from the overlay).
 DSH_GO_BRIDGE = "/opt/dsh-go/dsh-go-bridge"
+# Third-party plugin bundles unpacked by build-runtime.sh. The whole /opt/dsh-go tree is an
+# ENGINE_PATH, so an engine upgrade replaces these files instead of merging into them.
+DSH_PLUGIN_PREFIX = "/opt/dsh-go/plugins"
+PLUGIN_NAME_RE = re.compile(r"^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$")
+# A plugin tgz must stay pure JavaScript/TypeScript: no native addons, prebuilds or wasm blobs.
+PLUGIN_NATIVE_SUFFIXES = (".node", ".so", ".dylib", ".dll", ".exe", ".a", ".wasm")
+PLUGIN_MAX_BYTES = 64 * 1024 * 1024
+# cordis.patch.yml: rows below the first marker are shared with the bundle installed by
+# `dsh plugin add`; rows below the second marker are materialised only into the app's overlay.
+BRIDGE_SHARED_MARKER = "    # --- shared rows ---\n"
+BRIDGE_APP_PLUGIN_MARKER = "    # --- app plugin rows ---\n"
+BRIDGE_PATCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge", "dsh-go-bridge", "cordis.patch.yml")
 # runtime/boot/boot-cache.mjs: path cache for `dsh web` while it boots, preloaded by the dsh shim.
 BOOT_CACHE = "/opt/dsh-go/boot-cache.mjs"
 BOOT_CACHE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "boot", "boot-cache.mjs")
@@ -676,6 +689,203 @@ def cmd_deb_extract(args):
 
 
 # ---------------------------------------------------------------------------
+# third-party plugin bundles (tgz -> /opt/dsh-go/plugins/<package>)
+# ---------------------------------------------------------------------------
+def _plugin_pairs(values, option):
+    out = {}
+    for value in values or ():
+        name, sep, rest = value.partition("=")
+        if not sep or not name or not rest:
+            raise SystemExit("--%s must be NAME=VALUE, got %r" % (option, value))
+        if name in out:
+            raise SystemExit("duplicate --%s for %s" % (option, name))
+        out[name] = rest
+    return out
+
+
+def parse_plugins(specs, entry_specs=(), sha_specs=(), prefix=DSH_PLUGIN_PREFIX):
+    """--plugin NAME=DIR plus optional NAME=REL / NAME=SHA256 -> validated plugin descriptors."""
+    entries = _plugin_pairs(entry_specs, "plugin-entry")
+    shas = _plugin_pairs(sha_specs, "plugin-sha256")
+    prefix = posixpath.normpath(prefix)
+    if not prefix.startswith("/opt/dsh-go/") or ".." in prefix.split("/"):
+        raise SystemExit("plugin prefix must stay inside the app-owned /opt/dsh-go tree: " + prefix)
+    plugins, seen = [], set()
+    for spec in specs or ():
+        name, sep, directory = spec.partition("=")
+        if not sep or not name or not directory:
+            raise SystemExit("--plugin must be NAME=DIR, got %r" % spec)
+        if not PLUGIN_NAME_RE.match(name):
+            raise SystemExit("invalid plugin package name: " + name)
+        if name in seen:
+            raise SystemExit("duplicate --plugin for " + name)
+        seen.add(name)
+        directory = os.path.abspath(directory)
+        package_json = os.path.join(directory, "package.json")
+        if not os.path.isfile(package_json):
+            raise SystemExit("plugin directory has no package.json: " + directory)
+        with open(package_json, encoding="utf-8") as f:
+            pkg = json.load(f)
+        if pkg.get("name") != name:
+            raise SystemExit("plugin %s: package.json name is %r" % (directory, pkg.get("name")))
+        entry = entries.get(name) or pkg.get("main") or "lib/index.js"
+        entry = posixpath.normpath(str(entry).replace("\\", "/"))
+        if entry in ("", ".") or entry.startswith("/") or entry.startswith("../") or entry == "..":
+            raise SystemExit("plugin %s: entry must be a relative path inside the package: %r" % (name, entry))
+        if not os.path.isfile(os.path.join(directory, entry)):
+            raise SystemExit("plugin %s: entry not found: %s" % (name, entry))
+        sha256 = shas.get(name, "")
+        if sha256 and not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+            raise SystemExit("plugin %s: --plugin-sha256 must be a 64-character hex digest" % name)
+        plugins.append({
+            "name": name,
+            "version": pkg.get("version") or "",
+            "dir": directory,
+            "entry": entry,
+            "rootfsPath": posixpath.join(prefix, name),
+            "sha256": sha256.lower(),
+        })
+    unknown = (set(entries) | set(shas)) - seen
+    if unknown:
+        raise SystemExit("--plugin-entry/--plugin-sha256 for unconfigured plugins: " + ", ".join(sorted(unknown)))
+    slugs = [plugin_slug(p["name"]) for p in plugins]
+    if len(set(slugs)) != len(slugs):
+        raise SystemExit("plugin names produce duplicate overlay ids: " + ", ".join(slugs))
+    return plugins
+
+
+def public_plugin(plugin):
+    """The plugin facts that may be written into the rootfs / manifest (no host paths)."""
+    return {key: plugin[key] for key in ("name", "version", "entry", "rootfsPath", "sha256")}
+
+
+def cmd_extract_plugin(args):
+    """Verify one npm-style plugin tarball and unpack package/ into --out, refusing anything native."""
+    path = os.path.abspath(args.tgz)
+    if not os.path.isfile(path):
+        sys.exit("plugin tarball not found: " + path)
+    with open(path, "rb") as f:
+        got = hashlib.file_digest(f, "sha256").hexdigest()
+    if got != args.sha256.lower():
+        sys.exit("sha256 mismatch for %s: got %s want %s" % (path, got, args.sha256))
+    if not PLUGIN_NAME_RE.match(args.name):
+        sys.exit("invalid plugin package name: " + args.name)
+
+    out = os.path.abspath(args.out)
+    tmp = out + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp)
+    files, total, seen = [], 0, set()
+    try:
+        with tarfile.open(path, "r:*") as tar:
+            for member in tar:
+                if "\\" in member.name:
+                    sys.exit("plugin tarball member uses a backslash: " + member.name)
+                clean = norm_member(member.name)
+                if not clean:
+                    continue
+                parts = clean.split("/")
+                if parts[0] != "package":
+                    sys.exit("plugin tarball member is outside package/: " + member.name)
+                rel = "/".join(parts[1:])
+                if not rel:
+                    continue
+                if rel in seen:
+                    sys.exit("duplicate plugin tarball member: " + rel)
+                seen.add(rel)
+                dest = os.path.join(tmp, rel)
+                if member.isdir():
+                    os.makedirs(dest, exist_ok=True)
+                    continue
+                if not member.isreg():
+                    kind = "a symlink" if member.issym() else "a hard link" if member.islnk() else "a special file"
+                    sys.exit("plugin tarball contains %s (only files and directories): %s" % (kind, rel))
+                if member.size > PLUGIN_MAX_BYTES or total + member.size > PLUGIN_MAX_BYTES:
+                    sys.exit("plugin tarball exceeds %d bytes at %s" % (PLUGIN_MAX_BYTES, rel))
+                data = tar.extractfile(member).read()
+                if len(data) != member.size:
+                    sys.exit("truncated plugin tarball member: " + rel)
+                low = rel.lower()
+                if (low.endswith(PLUGIN_NATIVE_SUFFIXES) or "/prebuilds/" in "/" + low
+                        or low.endswith("/binding.gyp")):
+                    sys.exit("plugin must be pure JavaScript/TypeScript; native artifact: " + rel)
+                if data[:4] == b"\x7fELF":
+                    sys.exit("plugin must be pure JavaScript/TypeScript; ELF object: " + rel)
+                total += len(data)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as f:
+                    f.write(data)
+                os.chmod(dest, 0o755 if member.mode & 0o111 else 0o644)
+                files.append(rel)
+
+        package_json = os.path.join(tmp, "package.json")
+        if not os.path.isfile(package_json):
+            sys.exit("plugin tarball has no package/package.json")
+        with open(package_json, encoding="utf-8") as f:
+            pkg = json.load(f)
+        if pkg.get("name") != args.name:
+            sys.exit("plugin package.json name is %r, expected %r" % (pkg.get("name"), args.name))
+        if pkg.get("version") != args.version:
+            sys.exit("plugin package.json version is %r, expected %r" % (pkg.get("version"), args.version))
+        entry = args.entry or pkg.get("main") or "lib/index.js"
+        entry = posixpath.normpath(str(entry).replace("\\", "/"))
+        if entry in ("", ".") or entry.startswith("/") or entry.startswith("../") or entry == "..":
+            sys.exit("plugin entry must be a relative path inside the package: %r" % entry)
+        if not os.path.isfile(os.path.join(tmp, entry)):
+            sys.exit("plugin entry does not exist in the tarball: " + entry)
+
+        warnings = []
+        scripts = pkg.get("scripts") or {}
+        hooks = sorted(k for k in ("preinstall", "install", "postinstall") if k in scripts)
+        if hooks:
+            warnings.append("package.json declares %s; path loading never runs install hooks" % ", ".join(hooks))
+        dependencies = pkg.get("dependencies") or {}
+        if dependencies and not os.path.isdir(os.path.join(tmp, "node_modules")):
+            warnings.append("package.json declares dependencies (%s) but the tarball has no bundled node_modules"
+                            % ", ".join(sorted(dependencies)))
+        if entry.endswith(".js") and pkg.get("type") != "module":
+            warnings.append('package.json has no "type": "module"; the entry loads as CommonJS')
+
+        summary = {
+            "name": args.name, "version": args.version, "entry": entry, "sha256": got,
+            "files": len(files), "bytes": total, "warnings": warnings,
+        }
+        if args.prefix:
+            summary["rootfsPath"] = posixpath.join(posixpath.normpath(args.prefix), args.name)
+        shutil.rmtree(out, ignore_errors=True)
+        os.replace(tmp, out)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+    if args.out_json:
+        with open(args.out_json, "w") as f:
+            json.dump(summary, f, indent=2, sort_keys=True)
+            f.write("\n")
+    print("plugin %s@%s: %d files, %d bytes, entry %s, sha256 %s" % (
+        args.name, args.version, len(files), total, entry, got), file=sys.stderr)
+    for warning in warnings:
+        print("plugin warning: " + warning, file=sys.stderr)
+
+
+def cmd_render_overlay(args):
+    """Write the overlay build-runtime.sh would ship (debugging and host checks, no rootfs)."""
+    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_prefix)
+    runtime_info = json.loads(args.runtime_info) if args.runtime_info else {"runtimeVersion": "render-overlay"}
+    entries = overlay_entries(runtime_info, with_python=args.python, with_pnpm=args.pnpm,
+                              with_bridge=args.bridge, plugins=plugins)
+    if DSH_WEB_PATCH.lstrip("/") not in entries:
+        raise SystemExit("render-overlay: nothing to render (pass --pnpm, --bridge or --plugin)")
+    data = entries["etc/dsh-app/dsh-web.patch.yml"].data
+    if args.out:
+        with open(args.out, "wb") as f:
+            f.write(data)
+        print("wrote " + args.out, file=sys.stderr)
+    else:
+        sys.stdout.buffer.write(data)
+
+
+# ---------------------------------------------------------------------------
 # rootfs assembly
 # ---------------------------------------------------------------------------
 class Entry:
@@ -823,16 +1033,70 @@ def install_ca_bundle(entries, report):
 
 def bridge_shared_rows():
     """The rows of the bridge bundle's cordis.patch.yml that the local overlay also carries."""
-    source = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge", "dsh-go-bridge", "cordis.patch.yml")
-    with open(source, encoding="utf-8") as patch:
-        rows = patch.read().split("    # --- shared rows ---\n", 1)[1]
-    # Local runtimes load the bridge by path; it is not a profile dependency.
-    return rows.replace("name: dsh-go-bridge/companion/full-context",
-                        "name: %s/lib/companion/full-context.js" % DSH_GO_BRIDGE)
+    with open(BRIDGE_PATCH, encoding="utf-8") as patch:
+        text = patch.read()
+    if BRIDGE_SHARED_MARKER not in text:
+        raise SystemExit("cordis.patch.yml has no 'shared rows' marker")
+    rows = text.split(BRIDGE_SHARED_MARKER, 1)[1]
+    if BRIDGE_APP_PLUGIN_MARKER in rows:
+        rows = rows.split(BRIDGE_APP_PLUGIN_MARKER, 1)[0]
+    rows = rows.rstrip("\n")
+    if not rows.strip():
+        return ""
+    # Local runtimes load the bridge by path; it is not a profile dependency. Keep the marker as
+    # a comment in the overlay so the source of these rows stays visible.
+    return BRIDGE_SHARED_MARKER + rows.replace(
+        "name: dsh-go-bridge/companion/full-context",
+        "name: %s/lib/companion/full-context.js" % DSH_GO_BRIDGE) + "\n"
 
 
-def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridge=False):
+def plugin_slug(name):
+    """Overlay row id fragment: '@scope/pkg' -> 'scope-pkg'."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def plugin_entry_path(plugin):
+    return posixpath.join(plugin["rootfsPath"], plugin["entry"])
+
+
+def bridge_app_plugin_rows(plugins):
+    """Materialise the commented app-plugin template rows for the app's own overlay only.
+
+    The bundle's cordis.patch.yml is also read by `dsh plugin add dsh-go-bridge` on a remote
+    host, where /opt/dsh-go/plugins does not exist. The template therefore stays commented out
+    in the bundle; only /etc/dsh-app/dsh-web.patch.yml gets the active rows.
+    """
+    if not plugins:
+        return ""
+    with open(BRIDGE_PATCH, encoding="utf-8") as patch:
+        text = patch.read()
+    if BRIDGE_APP_PLUGIN_MARKER not in text:
+        raise SystemExit("cordis.patch.yml has no 'app plugin rows' marker")
+    tail = text.split(BRIDGE_APP_PLUGIN_MARKER, 1)[1]
+    template = []
+    for line in tail.splitlines():
+        if not line.startswith("    #"):
+            if line.strip() == "":
+                continue
+            break
+        payload = line[6:] if line.startswith("    # ") else line[5:]
+        # Rows keep their 4-space indent so they join the same `insert:` list as the rows above;
+        # prose comments (which do not start with "- " or two spaces) are skipped.
+        if payload.startswith("- ") or payload.startswith("  "):
+            template.append("    " + payload)
+    block = "\n".join(template)
+    if "@DSH_PLUGIN_SLUG@" not in block or "@DSH_PLUGIN_ENTRY@" not in block:
+        raise SystemExit("app plugin template needs @DSH_PLUGIN_SLUG@ and @DSH_PLUGIN_ENTRY@")
+    rows = []
+    for plugin in plugins:
+        rows.append(block.replace("@DSH_PLUGIN_SLUG@", plugin_slug(plugin["name"]))
+                         .replace("@DSH_PLUGIN_ENTRY@", plugin_entry_path(plugin)))
+    return BRIDGE_APP_PLUGIN_MARKER + "\n".join(rows) + "\n"
+
+
+def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridge=False, plugins=None):
     """Files dsh-app adds to the rootfs. Kept here so the recipe lives in one place."""
+    plugins = list(plugins or [])
     E = {}
 
     def f(path, text, mode=0o644):
@@ -901,7 +1165,7 @@ def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridg
         # what `npm i -g pnpm` creates under npm's global prefix (/usr/local)
         for name, target in PNPM_BINS.items():
             s("usr/local/bin/" + name, "../lib/node_modules/pnpm/bin/" + target)
-    if with_pnpm or with_bridge:
+    if with_pnpm or with_bridge or plugins:
         patch = ("# dsh-app: overlay for `dsh web`, passed with --patch by the app's launch command and\n"
                  "# replaced on every runtime upgrade (edits here do not survive one).\n")
         if with_pnpm:
@@ -926,6 +1190,11 @@ def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridg
                       "    - id: dsh-go-bridge\n"
                       "      name: %s/lib/index.js\n" % DSH_GO_BRIDGE)
             patch += bridge_shared_rows()
+            patch += bridge_app_plugin_rows(plugins)
+        elif plugins:
+            # A plugin without the bridge still needs its own root insert list.
+            patch += "- insert:\n"
+            patch += bridge_app_plugin_rows(plugins)
         f(DSH_WEB_PATCH.lstrip("/"), patch)
     d("root/.dsh", 0o700)
     d("root/.l2s", 0o700)          # PROOT_L2S_DIR: hard-link backing files (kept with /root on upgrade)
@@ -934,6 +1203,12 @@ def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridg
     d("var/lib/dsh-app/shm", 0o1777)    # bound to /dev/shm
     d("var/lib/dsh-app/empty", 0o755)   # bound over /sys/fs/selinux so dpkg/libselinux see no SELinux
     d("tmp", 0o1777)
+    if plugins:
+        # A plugin installed into a profile resolves DSH's peer packages from the DSH
+        # node_modules. A plugin loaded by path from /opt/dsh-go/plugins would not: the nearest
+        # ancestor node_modules is exposed here so `import '@deepseek-ai/cordis'` and friends
+        # resolve exactly as they would for a profile package.
+        s("opt/dsh-go/plugins/node_modules", "../../dsh/node_modules")
     f("etc/dsh-app/runtime.json", json.dumps(runtime_info, indent=2, sort_keys=True) + "\n")
     if with_python:
         s("usr/local/bin/python3", "../../../opt/python/bin/python3")
@@ -964,6 +1239,7 @@ class HashingWriter:
 def cmd_assemble(args):
     abi = args.abi
     machine = ABI[abi]["machine"]
+    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_prefix)
     entries = {}
     report = {"abi": abi, "dropped": {}, "droppedSamples": {}, "elf": [], "warnings": [],
               "convertedHardlinks": [], "relativizedSymlinks": 0, "installScriptsNotRun": []}
@@ -975,6 +1251,7 @@ def cmd_assemble(args):
             samples.append(path)
 
     runtime_info = json.loads(args.runtime_info)
+    runtime_info["dshPlugins"] = [public_plugin(plugin) for plugin in plugins]
     def digest(path):
         with open(path, "rb") as source:
             return hashlib.file_digest(source, "sha256").hexdigest()
@@ -1176,10 +1453,14 @@ def cmd_assemble(args):
                  "pnpm", pnpm_drop_reason)
     if args.bridge:
         add_tree(args.bridge, DSH_GO_BRIDGE.lstrip("/"), "bridge", lambda rel, abi, prune: None)
+    # Third-party plugin bundles: the tgz contents land verbatim under the app-owned
+    # /opt/dsh-go/plugins tree, and the overlay row (materialised above) loads the entry by path.
+    for plugin in plugins:
+        add_tree(plugin["dir"], plugin["rootfsPath"].lstrip("/"), "plugin", lambda rel, abi, prune: None)
 
     # 4. dsh-app overlay (wins over everything above)
     for p, e in overlay_entries(runtime_info, with_python=bool(args.python), with_pnpm=bool(args.pnpm_prefix),
-                                with_bridge=bool(args.bridge)).items():
+                                with_bridge=bool(args.bridge), plugins=plugins).items():
         entries[p] = e
 
     # 5. ELF audit + arch/libc pruning; Termux-style fixes for node-pty helpers
@@ -1327,8 +1608,10 @@ def cmd_assemble(args):
         "tarSha256": hw.h.hexdigest(),
         "uncompressedBytes": file_bytes,
         "counts": counts,
+        "plugins": [public_plugin(plugin) for plugin in plugins],
         "origins": {o: sum(1 for e in entries.values() if e.origin == o)
-                    for o in ("ubuntu", "deb", "python", "node", "dsh", "pnpm", "bridge", "overlay", "implicit")},
+                    for o in ("ubuntu", "deb", "python", "node", "dsh", "pnpm", "bridge", "plugin",
+                              "overlay", "implicit")},
     })
     report["droppedBytes"] = sum(report["dropped"].values())
     with open(args.report, "w") as f:
@@ -1460,6 +1743,7 @@ def cmd_manifest(args):
         "prootVersion": v["prootVersion"],
         "dshPatches": v.get("dshPatches", []),
         "dshGoBridge": {"version": v["dshGoBridge"], "path": DSH_GO_BRIDGE} if v.get("dshGoBridge") else None,
+        "dshPlugins": report.get("plugins", []),
         "tallocVersion": v["tallocVersion"],
         "androidShmemVersion": v["androidShmemVersion"],
         "npmRegistry": "https://registry.npmmirror.com",
@@ -1551,7 +1835,38 @@ def main():
     p.add_argument("--deb", action="append", help="extra .deb to unpack and register (no maintainer scripts)")
     p.add_argument("--python", help="python-build-standalone install_only tarball -> /opt/python")
     p.add_argument("--bridge", help="dsh-go-bridge package dir -> " + DSH_GO_BRIDGE + " (+ overlay row)")
+    p.add_argument("--plugin", action="append", default=[],
+                   help="third-party plugin bundle as NAME=DIR (repeats); copied to --plugin-prefix/NAME")
+    p.add_argument("--plugin-entry", action="append", default=[],
+                   help="NAME=REL entry file inside a --plugin dir (default: package.json main)")
+    p.add_argument("--plugin-sha256", action="append", default=[],
+                   help="NAME=SHA256 of the plugin tgz, recorded in the build report and manifest")
+    p.add_argument("--plugin-prefix", default=DSH_PLUGIN_PREFIX,
+                   help="rootfs parent for plugin bundles (default " + DSH_PLUGIN_PREFIX + ")")
     p.set_defaults(fn=cmd_assemble)
+
+    p = sub.add_parser("extract-plugin")
+    p.add_argument("--tgz", required=True)
+    p.add_argument("--sha256", required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--version", required=True)
+    p.add_argument("--entry", help="entry file relative to the package root (default: package.json main)")
+    p.add_argument("--prefix", default=DSH_PLUGIN_PREFIX, help="rootfs parent recorded in the summary")
+    p.add_argument("--out", required=True)
+    p.add_argument("--out-json", help="write the extraction summary here")
+    p.set_defaults(fn=cmd_extract_plugin)
+
+    p = sub.add_parser("render-overlay")
+    p.add_argument("--runtime-info", help="JSON object written to etc/dsh-app/runtime.json")
+    p.add_argument("--pnpm", action="store_true", help="include the plugin-manager registries row")
+    p.add_argument("--bridge", action="store_true", help="include the dsh-go-bridge row and shared rows")
+    p.add_argument("--plugin", action="append", default=[], help="NAME=DIR (repeats)")
+    p.add_argument("--plugin-entry", action="append", default=[], help="NAME=REL (repeats)")
+    p.add_argument("--plugin-sha256", action="append", default=[], help="NAME=SHA256 (repeats)")
+    p.add_argument("--plugin-prefix", default=DSH_PLUGIN_PREFIX)
+    p.add_argument("--python", action="store_true", help="include the Python symlinks")
+    p.add_argument("--out", help="write here instead of stdout")
+    p.set_defaults(fn=cmd_render_overlay)
 
     p = sub.add_parser("manifest")
     p.add_argument("--abi", required=True)
