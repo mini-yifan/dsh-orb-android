@@ -293,7 +293,7 @@ class FakeSessions extends SessionsController {
   Future<List<SessionSummary>> build() async => listed;
 
   @override
-  Future<String> create({bool autoApprove = true}) async {
+  Future<String> create({bool autoApprove = true, String? agentPreset}) async {
     creates++;
     return created;
   }

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:dsh_app/links/launcher_entries.dart';
 import 'package:dsh_app/notify/chat_alerts.dart';
@@ -31,6 +33,7 @@ class _Client extends DshClient {
   @override
   DshMux get mux => testMux;
   final prompts = <(String, String, String?)>[];
+  final promptImages = <List<PromptImage>>[];
   bool fail = false;
   bool running = false;
   @override
@@ -56,6 +59,7 @@ class _Client extends DshClient {
     String? timeZone,
   }) async {
     prompts.add((sessionId, text, requestId));
+    promptImages.add(images);
     if (fail) throw const DshRemoteException('network', 'offline');
     return requestId ?? 'r';
   }
@@ -68,14 +72,28 @@ class _Local extends LocalConnectionController {
 
 class _Sessions extends SessionsController {
   int creates = 0;
+  final presets = <String>[];
   final list = [session('existing', title: 'Work')];
   Completer<String>? creation;
+  bool missingOrb = false;
   @override
   Future<List<SessionSummary>> build() async => list;
   @override
-  Future<String> create({bool autoApprove = true}) async {
+  Future<String> create({bool autoApprove = true, String? agentPreset}) async {
+    if (agentPreset != null) {
+      if (missingOrb) throw const DshRemoteException('agent-preset/not-found', 'no orb-phone preset');
+      presets.add(agentPreset);
+    }
     creates++;
     return creation?.future ?? 'new-chat';
+  }
+
+  /// Replaces the list the provider already built (the pet's target lookup).
+  void replace(List<SessionSummary> next) {
+    list
+      ..clear()
+      ..addAll(next);
+    state = AsyncData(List.unmodifiable(next));
   }
 }
 
@@ -117,14 +135,16 @@ void main() {
     await client.close();
   });
 
-  Future<Map> offer() async => await actions.handle(const MethodCall('askTarget')) as Map;
-  Future<Map> send(Map target, {bool fresh = false, String? host, int? offerId}) async => await actions.handle(
+  Future<Map> offer({bool fresh = false}) async =>
+      await actions.handle(MethodCall('askTarget', {'fresh': fresh})) as Map;
+  Future<Map> send(Map target, {bool fresh = false, String? host, int? offerId, String? screenshot}) async => await actions.handle(
     MethodCall('ask', {
       'offer': offerId ?? target['offer'],
       'host': host ?? HostRef.local.encode(),
       'sessionId': fresh ? null : 'existing',
       'fresh': fresh,
       'text': 'hello from pet',
+      'screenshot': screenshot,
     }),
   ) as Map;
 
@@ -143,7 +163,58 @@ void main() {
     final target = await offer();
     expect((await send(target, fresh: true))['sent'], true);
     expect(sessions.creates, 1);
+    expect(sessions.presets, [orbPhonePreset]);
     expect(client.prompts.single.$1, 'new-chat');
+  });
+
+  test('a runtime without the Orb preset still creates the chat', () async {
+    sessions.missingOrb = true;
+    final target = await offer();
+    expect((await send(target, fresh: true))['sent'], true);
+    expect(sessions.creates, 1);
+    expect(sessions.presets, isEmpty);
+    expect(client.prompts.single.$1, 'new-chat');
+  });
+
+  test('the capture flag follows this phone and its Orb conversation', () async {
+    // The setUp's current session has no preset: the current target gets no capture.
+    expect((await offer())['shot'], false);
+    // 「新对话」 on this phone is always the ball's Orb session.
+    expect((await offer(fresh: true))['shot'], true);
+    sessions.replace([session('existing', title: 'Work', preset: orbPhonePreset)]);
+    expect((await offer())['shot'], true);
+  });
+
+  test('a send-time capture rides along as one inline image and is dropped', () async {
+    sessions.replace([session('existing', title: 'Work', preset: orbPhonePreset)]);
+    final dir = Directory.systemTemp.createTempSync('dsh-pet-shot');
+    final file = File('${dir.path}/screenshot.png')
+      ..writeAsBytesSync(base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      ));
+    final target = await offer();
+    expect(target['shot'], true);
+    expect((await send(target, screenshot: file.path))['sent'], true);
+    final images = client.promptImages.single;
+    expect(images, hasLength(1));
+    expect(images.single.mediaType, 'image/png');
+    expect(images.single.name, startsWith('screen-'));
+    expect(file.existsSync(), false);
+    dir.deleteSync(recursive: true);
+  });
+
+  test('a screenshot path is ignored when the target is not the Orb', () async {
+    final dir = Directory.systemTemp.createTempSync('dsh-pet-shot');
+    final file = File('${dir.path}/screenshot.png')
+      ..writeAsBytesSync(base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      ));
+    final target = await offer();
+    expect(target['shot'], false);
+    expect((await send(target, screenshot: file.path))['sent'], true);
+    expect(client.promptImages.single, isEmpty);
+    expect(file.existsSync(), false);
+    dir.deleteSync(recursive: true);
   });
 
   test('failed new send preserves the same created session for retry', () async {

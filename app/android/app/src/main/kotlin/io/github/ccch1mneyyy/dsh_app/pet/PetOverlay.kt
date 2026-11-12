@@ -105,6 +105,8 @@ internal object PetOverlay {
     /** 问一句's bar: as wide as there is room beside the pet, within these. */
     private const val ASK_MIN_DP = 240f
     private const val ASK_MAX_DP = 360f
+    /** Let the keyboard and the bar finish hiding before the accessibility screenshot. */
+    private const val ASK_SHOT_DELAY_MS = 180L
     /** Less than this much recording is nothing heard (the composer's rule, 0.3 s at 16 kHz). */
     private const val MIN_WAV_BYTES = 44 + 9_600
     /** A recording held this long without the system silencing it is a real one. */
@@ -1550,8 +1552,13 @@ internal object PetOverlay {
         view.input.requestFocus()
         view.post { if (askView === view) view.context.getSystemService(InputMethodManager::class.java)?.showSoftInput(view.input, 0) }
         evaluate()
+        requestAskTarget(view)
+    }
+
+    /** Asks Dart where a send would go; 「新对话」 re-asks so the capture flag follows it too. */
+    private fun requestAskTarget(view: AskBarView) {
         val request = ++askRequest
-        callDart("askTarget", mapOf("fresh" to fresh)) { raw ->
+        callDart("askTarget", mapOf("fresh" to askFresh)) { raw ->
             if (request != askRequest || askView !== view) return@callDart
             // No answer: nothing known to stand in the way; a send hands the text to the app.
             askTarget = AskTarget.fromMap(raw) ?: AskTarget(null, null, null, AskTarget.VOICE_OFF)
@@ -1573,9 +1580,10 @@ internal object PetOverlay {
         }
 
         override fun onSwitch() {
-            if (!alive(ticket)) return
+            if (!alive(ticket) || askDraftState.sending) return
             askFresh = !askFresh
             askView?.let(::showTarget)
+            askView?.let(::requestAskTarget)
         }
 
         override fun onMic(down: Boolean, cancelled: Boolean) {
@@ -1629,10 +1637,64 @@ internal object PetOverlay {
         machine.onTouch(now())
         val fresh = askFresh || askTarget?.current == null
         val chat = askTarget?.chat(fresh)
+        val offer = askTarget?.offer
         view.setState(sending = true)
-        view.setStatus(AppStrings.get(app, R.string.pet_ask_sending))
         val request = askRequest
-        val args = mapOf("offer" to askTarget?.offer, "text" to text, "fresh" to (chat?.sessionId == null), "sessionId" to chat?.sessionId, "host" to chat?.host)
+        val deliver: (String?) -> Unit = { screenshot ->
+            deliverAsk(view, offer, text, send, fresh, chat, request, screenshot)
+        }
+        if (askTarget?.shot == true) {
+            view.setStatus(AppStrings.get(app, R.string.pet_ask_capturing))
+            captureAskScreenshot(view, deliver)
+        } else {
+            view.setStatus(AppStrings.get(app, R.string.pet_ask_sending))
+            deliver(null)
+        }
+    }
+
+    /** Hides the bar and pet, captures the screen behind them, then sends the text with it. */
+    private fun captureAskScreenshot(view: AskBarView, reply: (String?) -> Unit) {
+        val request = capture.begin()
+        if (request == null) {
+            reply(null)
+            return
+        }
+        view.visibility = View.INVISIBLE
+        view.input.clearFocus()
+        view.context.getSystemService(InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(view.windowToken, 0)
+        hideTarget()
+        petView?.visibility = View.INVISIBLE
+        publishStatus()
+        main.postDelayed({
+            PetScreenshot.capture(app) { result ->
+                val accepted = capture.finish(request)
+                if (askView === view) view.visibility = View.VISIBLE
+                petView?.visibility = View.VISIBLE
+                evaluate()
+                reply(if (accepted) result.path else null)
+            }
+        }, ASK_SHOT_DELAY_MS)
+    }
+
+    private fun deliverAsk(
+        view: AskBarView,
+        offer: Long?,
+        text: String,
+        send: PetAskDraft.Send,
+        fresh: Boolean,
+        chat: AskTarget.AskChat?,
+        request: Long,
+        screenshot: String?,
+    ) {
+        val args = mapOf(
+            "offer" to offer,
+            "text" to text,
+            "fresh" to (chat?.sessionId == null),
+            "sessionId" to chat?.sessionId,
+            "host" to chat?.host,
+            "screenshot" to screenshot,
+        )
         callDart("ask", args) { raw ->
             val r = raw as? Map<*, *>
             val completion = askDraftState.finish(send, accepted = r?.get("sent") == true) ?: return@callDart

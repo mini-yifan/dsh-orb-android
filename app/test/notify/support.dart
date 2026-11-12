@@ -14,7 +14,7 @@ Future<void> settle() async {
   }
 }
 
-SessionSummary session(String id, {String? title, bool running = false, String? parent}) => SessionSummary(
+SessionSummary session(String id, {String? title, bool running = false, String? parent, String? preset}) => SessionSummary(
   sessionId: id,
   updatedAt: DateTime(2026, 10, 24),
   running: running,
@@ -22,7 +22,7 @@ SessionSummary session(String id, {String? title, bool running = false, String? 
   agentAvailable: true,
   parentSessionId: parent,
   origin: parent == null ? null : 'subagent',
-  projections: SessionProjections(1, {'title': title}),
+  projections: SessionProjections(1, {'title': title, 'agentPreset': ?preset}),
 );
 
 ApprovalRequestedEvent approval(String eventId, String sessionId, {String tool = 'bash', String? reason}) =>

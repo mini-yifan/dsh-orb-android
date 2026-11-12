@@ -35,6 +35,7 @@ class _Sessions extends SessionsController {
     HostConnection conn, {
     required bool Function() isCurrent,
     bool autoApprove = true,
+    String? agentPreset,
   }) async {
     creates++;
     return 'new-1';

@@ -41,6 +41,12 @@ PLUGIN_MAX_BYTES = 64 * 1024 * 1024
 BRIDGE_SHARED_MARKER = "    # --- shared rows ---\n"
 BRIDGE_APP_PLUGIN_MARKER = "    # --- app plugin rows ---\n"
 BRIDGE_PATCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge", "dsh-go-bridge", "cordis.patch.yml")
+# App-only preset that needs the bundled Mesh plugin's return-files tool; appended only when
+# that plugin is configured. See the file's own comment for why it is not a shared row.
+BRIDGE_PHONE_BACKGROUND_PATCH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "bridge", "dsh-go-bridge", "phone-background.patch.yml")
+MESH_PLUGIN_NAME = "@dsh-mesh/plugin"
+PHONE_BACKGROUND_RETURN_FILES = "@DSH_MESH_RETURN_FILES@"
 # runtime/boot/boot-cache.mjs: path cache for `dsh web` while it boots, preloaded by the dsh shim.
 BOOT_CACHE = "/opt/dsh-go/boot-cache.mjs"
 BOOT_CACHE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "boot", "boot-cache.mjs")
@@ -1060,13 +1066,47 @@ def bridge_shared_rows():
         "name: %s/lib/companion/full-context.js" % DSH_GO_BRIDGE) + "\n"
 
 
+def plugin_entry_path(plugin):
+    return posixpath.join(plugin["rootfsPath"], plugin["entry"])
+
+
+def plugin_export_path(plugin, subpath):
+    """Resolve package.json `exports[subpath]` to an absolute path inside the unpacked plugin."""
+    with open(os.path.join(plugin["dir"], "package.json"), encoding="utf-8") as manifest:
+        exports = json.load(manifest).get("exports") or {}
+    target = exports.get(subpath)
+    if isinstance(target, dict):
+        target = target.get("import") or target.get("default") or target.get("require")
+    if not isinstance(target, str) or not target:
+        raise SystemExit("plugin %s has no exports[%r]" % (plugin["name"], subpath))
+    relative = posixpath.normpath(target.replace("\\", "/"))
+    if relative.startswith("./"):
+        relative = relative[2:]
+    if relative in ("", ".", "..") or relative.startswith("../") or relative.startswith("/"):
+        raise SystemExit("plugin %s: exports[%r] must stay inside the package: %r" % (plugin["name"], subpath, target))
+    return posixpath.join(plugin["rootfsPath"], relative)
+
+
+def bridge_phone_background_rows(plugins):
+    """The phone-background preset, only when the Mesh plugin that provides its tool is bundled.
+
+    The preset names mesh_return_files by absolute path, so it must not appear in an overlay
+    that has no @dsh-mesh/plugin: the preset registry would keep a broken definition visible.
+    """
+    mesh = next((plugin for plugin in plugins if plugin["name"] == MESH_PLUGIN_NAME), None)
+    if mesh is None:
+        return ""
+    with open(BRIDGE_PHONE_BACKGROUND_PATCH, encoding="utf-8") as patch:
+        text = patch.read()
+    if PHONE_BACKGROUND_RETURN_FILES not in text:
+        raise SystemExit("phone-background.patch.yml has no return-files placeholder")
+    return "\n" + text.replace(
+        PHONE_BACKGROUND_RETURN_FILES, plugin_export_path(mesh, "./return-files")).rstrip("\n") + "\n"
+
+
 def plugin_slug(name):
     """Overlay row id fragment: '@scope/pkg' -> 'scope-pkg'."""
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-
-
-def plugin_entry_path(plugin):
-    return posixpath.join(plugin["rootfsPath"], plugin["entry"])
 
 
 def bridge_app_plugin_rows(plugins):
@@ -1194,6 +1234,10 @@ def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridg
                       "      - %s\n"
                       "      - %s\n" % (NPMMIRROR, NPMJS))
         if with_bridge:
+            # The bridge resolves DSH runtime packages through the same node_modules tree the
+            # bundled DSH uses. It needs the seam because background-agent.js imports
+            # @deepseek-ai/dsh-tools and dsh-llm; the plugin seam below serves plugins instead.
+            s("opt/dsh-go/node_modules", "../dsh/node_modules")
             patch += ("#\n"
                       "# dsh-go-bridge: plugin inventory for the app (GET /dsh-go/v1/inventory), loaded by path.\n"
                       "# Do not also install dsh-go-bridge into a profile: two sources of one browser package\n"
@@ -1207,6 +1251,7 @@ def overlay_entries(runtime_info, with_python=False, with_pnpm=False, with_bridg
             # A plugin without the bridge still needs its own root insert list.
             patch += "- insert:\n"
             patch += bridge_app_plugin_rows(plugins)
+        patch += bridge_phone_background_rows(plugins)
         f(DSH_WEB_PATCH.lstrip("/"), patch)
     d("root/.dsh", 0o700)
     d("root/.l2s", 0o700)          # PROOT_L2S_DIR: hard-link backing files (kept with /root on upgrade)

@@ -30,7 +30,7 @@ class _HeldSessions extends FakeSessions {
   final pending = <Completer<String>>[];
 
   @override
-  Future<String> create({bool autoApprove = true}) {
+  Future<String> create({bool autoApprove = true, String? agentPreset}) {
     final request = Completer<String>();
     pending.add(request);
     return request.future;

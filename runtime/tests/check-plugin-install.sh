@@ -127,6 +127,8 @@ row = ("    - id: app-plugin-dsh-orb-android-plugin-probe\n"
        "      config: {}\n")
 assert row in text[app:], "materialised app plugin row is missing or wrong"
 assert "@DSH_PLUGIN_" not in text, "template placeholder leaked into the overlay"
+assert "id: preset-orb-phone" in text, "the floating-ball preset is missing from the overlay"
+assert "preset-phone-background" not in text, "phone-background must only appear with @dsh-mesh/plugin"
 assert text.index("- id: dsh-go-bridge") < app, "dsh-go-bridge must be inserted before app plugin rows"
 for line in text[app:].splitlines():
     assert not line.startswith("- "), "app plugin row escaped the insert list: " + line

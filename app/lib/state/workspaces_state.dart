@@ -511,15 +511,16 @@ Future<SessionCreated> createSessionInWorkspace(
   DshClient client,
   String? workspaceId, {
   String? cwd,
+  String? agentPreset,
   void Function()? checkCurrent,
 }) async {
   checkCurrent?.call();
-  if (workspaceId == null) return client.createSession(cwd: cwd);
+  if (workspaceId == null) return client.createSession(cwd: cwd, agentPreset: agentPreset);
   try {
-    return await client.createSession(workspaceId: workspaceId);
+    return await client.createSession(workspaceId: workspaceId, agentPreset: agentPreset);
   } on DshRemoteException catch (e) {
     if (e.code != WorkspaceErrors.notFound) rethrow;
     checkCurrent?.call();
-    return client.createSession(cwd: cwd);
+    return client.createSession(cwd: cwd, agentPreset: agentPreset);
   }
 }

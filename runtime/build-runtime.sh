@@ -12,7 +12,7 @@
 #   DSH_PLUGIN_NAME=@dsh-mesh/plugin DSH_PLUGIN_VERSION=0.1.0 \
 #   DSH_PLUGIN_URL=https://.../plugin.tgz DSH_PLUGIN_SHA256=<sha256> \
 #   DSH_PLUGIN_ENTRY=lib/index.mjs \
-#   DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"standard"}' \
+#   DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}' \
 #   runtime/build-runtime.sh arm64-v8a
 #   # build without a plugin: DSH_PLUGIN_URL=
 #   # check the plugin path only (fetch/verify/extract/render overlay; no rootfs):

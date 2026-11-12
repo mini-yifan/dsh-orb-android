@@ -158,6 +158,7 @@
     <string name="pet_ask_send">Send</string>
     <string name="pet_ask_hold_to_talk">Hold to talk</string>
     <string name="pet_ask_sending">Sending</string>
+    <string name="pet_ask_capturing">Capturing the screen</string>
     <string name="pet_ask_failed">Not sent</string>
     <string name="pet_ask_listening">Listening. Let go to finish</string>
     <string name="pet_ask_transcribing">Transcribing</string>

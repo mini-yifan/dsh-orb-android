@@ -27,9 +27,17 @@ import android.widget.TextView
  * Where 问一句 sends, as Dart answers `askTarget` (docs/design/pets.md §2.7): the conversation the
  * pet stands for when it has one and it is idle ([current]), else a new chat on the host in use
  * ([fresh]); [problem] when nothing can be sent there (the engine is off, no host); whether the
- * offline voice model can take a recording ([voice]).
+ * offline voice model can take a recording ([voice]); whether the send belongs to this phone's
+ * Computer Use preset, so the bar hides itself and captures what is behind it ([shot]).
  */
-data class AskTarget(val current: AskChat?, val fresh: AskChat?, val problem: String?, val voice: String, val offer: Long? = null) {
+data class AskTarget(
+    val current: AskChat?,
+    val fresh: AskChat?,
+    val problem: String?,
+    val voice: String,
+    val offer: Long? = null,
+    val shot: Boolean = false,
+) {
     /** One conversation (null [sessionId]: a new one) and its one line, 「修复登录 · 本机」. */
     data class AskChat(val sessionId: String?, val host: String?, val line: String)
 
@@ -61,6 +69,7 @@ data class AskTarget(val current: AskChat?, val fresh: AskChat?, val problem: St
                 fresh = chat(m["fresh"])?.copy(sessionId = null),
                 problem = PetPush.clean(m["problem"] as? String, MAX_LINE),
                 voice = (m["voice"] as? String)?.takeIf { it == VOICE_READY || it == VOICE_MISSING } ?: VOICE_OFF,
+                shot = m["shot"] == true,
             )
         }
     }

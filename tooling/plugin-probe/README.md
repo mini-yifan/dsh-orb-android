@@ -106,12 +106,12 @@ DSH_PLUGIN_NAME='@dsh-mesh/plugin' \
 DSH_PLUGIN_VERSION='0.1.0' \
 DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.0.tgz' \
 DSH_PLUGIN_ENTRY='lib/index.mjs' \
-DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"standard"}' \
+DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}' \
 bash runtime/build-runtime.sh arm64-v8a
 ```
 
 - `platform: android` 让插件按手机默认值处理 `remoteToolGuard`（`mcp__phone__*`），并让其他设备看到的节点平台是 android。
-- `incomingPreset: standard` 让其他设备派来的任务跑 dsh-Go 的标准模式 preset。
+- `incomingPreset: phone-background` 让其他设备派来的任务跑「后台模式」preset：标准工具 + 手机操控 + `mesh_return_files` 文件回传。这个 preset 由 `runtime/bridge/dsh-go-bridge/phone-background.patch.yml` 定义，只在构建时打包了 `@dsh-mesh/plugin` 才会写进应用 overlay；没有插件时它不会出现，避免一个加载不了的 preset。
 - 真实 tgz 不含 `node_modules`；bundle 里的 werift 是 Relay-only 的纯 JS 代码，v0 不启用 WebRTC 就不会加载原生后端。
 - 包名和入口以 tarball 里的 `package.json` 为准；`DSH_PLUGIN_VERSION` 必须和 `package.json.version` 完全一致，否则 `extract-plugin` 会拒绝解包。
 

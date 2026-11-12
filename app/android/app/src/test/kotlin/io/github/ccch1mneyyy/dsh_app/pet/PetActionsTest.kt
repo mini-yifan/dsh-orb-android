@@ -35,6 +35,13 @@ class PetActionsTest {
         assertEquals(AskTarget.VOICE_READY, target.voice)
     }
 
+    @Test fun onlyALocalOrbTargetAsksForASendTimeCapture() {
+        val base = mapOf("offer" to 1L, "fresh" to mapOf("host" to "local", "line" to "New chat"), "voice" to "off")
+        assertFalse(AskTarget.fromMap(base)!!.shot)
+        assertTrue(AskTarget.fromMap(base + ("shot" to true))!!.shot)
+        assertFalse(AskTarget.fromMap(base + ("shot" to "yes"))!!.shot)
+    }
+
     @Test fun cannotSendWhileBusyBlockedOrRecording() {
         assertTrue(AskBarView.canSend("hello", false, false, false))
         assertFalse(AskBarView.canSend("  ", false, false, false))

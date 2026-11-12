@@ -17,7 +17,7 @@
 |---|---|---|
 | 手机操控工具 | `phone/PhoneGuest.kt:7-71`、`PhoneToolCatalog.kt`、`McpServer.kt` | 引擎启动时写入 `/opt/dsh-app/phone/phone.patch.yml`，以 `--patch` 在**根上**插入 MCP 服务 `phone`；**所有 preset 自动继承**，模型看到 `mcp__phone__{apps,open,intent,notify,clipboard,screen,collect,tap,type,scroll,key,tap_xy,handoff}`。前提：「手机操控」开关打开且不在安全模式 |
 | 屏幕串行 | `phone/PhoneTaskSessions.kt:245-491`、`SerialWorker.kt`、`McpServer.kt:131` | 主屏独占；另一个会话要用屏幕时最多等 30 秒，然后返回「屏幕或应用资源正被另一个对话使用…」；后台槽默认 1、最多 3 |
-| 内置 preset | `@deepseek-ai/dsh-web-app`；`runtime/bridge/dsh-go-bridge/cordis.patch.yml` | `standard`（标准模式）、`ptc`、`minimal`、`cordis`；dsh-Go 自加 `dsh-go-companion`、`dsh-go-companion-full`。可用 overlay 插入新 preset |
+| 内置 preset | `@deepseek-ai/dsh-web-app`；`runtime/bridge/dsh-go-bridge/cordis.patch.yml` | `standard`（标准模式）、`ptc`、`minimal`、`cordis`；dsh-Go 自加 `dsh-go-companion`、`dsh-go-companion-full`、`orb-phone`（悬浮球）；打包 mesh 插件时另有 `phone-background`（后台模式）。可用 overlay 插入新 preset |
 | 工具包 | `runtime/locks/dsh-0.2.2-rc.1/package-lock.json` | `@deepseek-ai/dsh-tool-bash`、`dsh-tool-web`、`dsh-tool-ask-user` 都随 DSH 打包 |
 | 悬浮窗 | `pet/PetOverlay.kt`、`OverlayWindowOwner.kt`、`EdgeSnap.kt` | **原生 Kotlin View**；`TYPE_ACCESSIBILITY_OVERLAY` 或 `TYPE_APPLICATION_OVERLAY`；拖拽、吸边、长按菜单、气泡 |
 | 悬浮球骨架 | `phone/a11y/OverlayBall.kt`、`ControlOverlay.kt`、`OverlayCapsule.kt` | 48 dp 球 + 停靠 + 按住停止 |
@@ -37,61 +37,83 @@
 
 ### 5.2 Orb preset：精简工具集
 
-在 `dsh-orb-android` 仓库的 `runtime/bridge/dsh-go-bridge/cordis.patch.yml` 里新增一个 preset，照桌面 `preset-computer-use` 的写法：
+截至 2026-11-12 已落地两个 preset（真机加载待下次 APK 验证）：
 
 ```yaml
+# runtime/bridge/dsh-go-bridge/cordis.patch.yml（shared rows，所有桥接安装都会带上）
 - insert:
     - id: preset-orb-phone
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: orb-phone
         name: 悬浮球
-        description: 精简工具集：Shell、网页检索与抓取、向用户提问、手机操控。
+        description: Computer Use：看屏幕、操作手机、网页检索与提问；悬浮球发消息时附带当前屏幕截图。
+        order: 5
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
-            config:
-              prefix: >-
-                （手机悬浮球人设：先看用户说话时的截图；屏幕操作在这里做；
-                要读写文件、跑命令、长任务时交给后台；什么时候派到别的设备……）
           - id: tool-bash
             name: '@deepseek-ai/dsh-tool-bash'
-          - id: tool-web
-            name: '@deepseek-ai/dsh-tool-web'
-            config:
-              fetch: true
-              searchTimeoutMs: 60000
+          - id: compaction
+            name: cordis:group
           - id: tool-ask-user
             name: '@deepseek-ai/dsh-tool-ask-user'
-          - id: compaction             # 与桌面相同的压缩组，不是工具
-            name: cordis:group
-            ...
-          - id: tool-background-agent  # A4 加入：派本机标准模式后台（5.3），手机仓库自己的包
-            name: '@dsh-orb-android/background-agent'
-          - id: tool-device-agent      # A5 加入：派其他设备（6.3），来自 dsh-mesh
-            name: '@dsh-mesh/plugin/device-agent'
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+        # mcp__phone__* 由根上的 MCP 服务继承，不写在这里。
 ```
 
+- `orb-phone` 的工具就是桌面 `computer-use` 的非 GUI 部分：`bash`、网页检索/抓取、`ask_user_question`、压缩组；**没有**文件、todo、子代理、后台/设备调度工具。
+- 悬浮球「问一句」新建会话时显式传 `agentPreset: orb-phone`；发消息时原生输入条先隐藏自己和宠物、收起键盘，再用 `PetScreenshot` 截当前屏，把路径随 `ask` 交给 Dart，作为一张内联图片附在 prompt 上。截图失败（安全页/无障碍未开）只发文字。`orb-phone` 会话的后续消息也走同一条路。
+- 远端 host 不传这个 preset，也不截图；仍是 host 默认 preset。
 - **手机操控工具不写在列表里**：`mcp__phone__*` 由根上的 MCP 服务提供，所有 preset 自动继承。Orb 首次引导必须打开无障碍与「手机操控」开关；没打开时 Orb 只能做文字问答，要明确提示。
-- 两个调度工具只负责把活交出去，不直接读写文件或操作屏幕。
-- **各阶段模型应看到的工具**（每个里程碑导出一次核对；不应出现文件读写、todo、子代理、`remote_*` 等）：
+
+后台模式（供其他设备派任务，不依赖 A4 的 `background_agent` 调度器）：
+
+```yaml
+# runtime/bridge/dsh-go-bridge/phone-background.patch.yml，仅在打包 @dsh-mesh/plugin 时
+# 由 rtbuild.py 追加到 /etc/dsh-app/dsh-web.patch.yml
+- insert:
+    - id: preset-phone-background
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: phone-background
+        name: 后台模式
+        description: 标准工具 + 手机操控 + 文件回传，供其他设备派来的后台任务使用。
+        order: 21
+        plugins:
+          # 标准工具集去掉需要人在手机旁的部分：
+          # plan mode / ask_user_question / 子代理 / present / plugin-manager / plugin-market
+          # 加上：
+          - id: tool-mesh-return-files
+            name: '/opt/dsh-go/plugins/@dsh-mesh/plugin/lib/return-files.mjs'
+```
+
+- 传 `DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}'` 后，其他设备派来的任务就用这个 preset。文件回传工具与桌面 `dsh-orb/mesh/return-files` 是同一份实现（`@dsh-mesh/mesh/return-files`），任务结束后发起端下载 `.mesh-out/<sessionId>/`。
+- 没有打包 `@dsh-mesh/plugin` 时，这个 preset 不会出现在 overlay，避免一个 import 失败的 preset 常驻列表。
+- A4 的 `background_agent`（手机自己派本机后台 + 任务卡 + 完成通知）仍未实现；本阶段的后台模式是被动接收远程任务，由现有 `ChatNotifier` 负责完成/等审批通知。
 
 | 阶段 | 模型可见工具 |
 |---|---|
-| A0–A3 | `bash`、网页检索与抓取、`ask_user_question`、`mcp__phone__*` |
-| A4 | 上面 + `background_agent` / `background_agent_status` / `background_agent_stop` |
+| A0–A3（当前 `orb-phone`） | `bash`、网页检索与抓取、`ask_user_question`、`mcp__phone__*` |
+| A4（未做） | 上面 + `background_agent` / `background_agent_status` / `background_agent_stop` |
 | A5 | 上面 + `device_agent` / `device_agent_status` / `device_agent_stop` |
+| 后台模式（当前 `phone-background`） | 标准工具（去 plan/ask_user/子代理/present/plugin 管理）+ `mesh_return_files` + `mcp__phone__*` |
 
 ### 5.3 后台：dsh-Go 标准模式
 
-- 工具名 `background_agent`（另有 `_status`、`_stop`），由手机仓库自己的小包 `@dsh-orb-android/background-agent` 提供，不依赖dsh-orb-cordis 仓库。写法参照dsh-orb-cordis 仓库 `code_agent` 的派发与完成通知逻辑（`packages/computer-use/src/code-agent.ts`、`code-agent-completion.ts`）。可以照着重写，也可以拷贝后保留 MIT 声明。区别有两点：目标 preset = `standard`；**不挂 `attachUnattendedCodeAgent`**（`code_agent` 写死目标 `desktop` 并自动放行，见 `code-agent.ts:353`）。dsh-orb-cordis 仓库的 `code_agent` 不动。
+> 2026-11-12：本节是 A4 的 `background_agent` 调度器设计，**尚未实现**。本阶段已落地的是 5.2 的 `phone-background` preset（被动接收其他设备的任务）。
+
+- 工具名 `background_agent`（另有 `_status`、`_stop`），由手机仓库自己的小包 `@dsh-orb-android/background-agent` 提供，不依赖dsh-orb-cordis 仓库。写法参照dsh-orb-cordis 仓库 `code_agent` 的派发与完成通知逻辑（`packages/computer-use/src/code-agent.ts`、`code-agent-completion.ts`）。可以照着重写，也可以拷贝后保留 MIT 声明。区别有两点：目标 preset = `phone-background`（标准工具 + 手机操控 + `mesh_return_files`）；**不挂 `attachUnattendedCodeAgent`**（`code_agent` 写死目标 `desktop` 并自动放行，见 `code-agent.ts:353`）。dsh-orb-cordis 仓库的 `code_agent` 不动。
 - 不拷贝 `computer-use` 包本身：它带 macOS/Windows 原生后端，在 PRoot 里加载不了。只拷派发、完成通知这两块纯 JS 逻辑。
 - 后台会话的审批与提问不自动处理：dsh-Go 已有「等审批/等回答」系统通知（`ChatNotifier`）；Orb 面板的任务卡显示「等待确认」，点开可在面板里答（5.5）。
 - **屏幕共用**：标准模式也继承了 `mcp__phone__*`。派发时在任务正文写明「后台任务，除非任务本身需要，不要操作手机屏幕」。即使后台去操作，dsh-Go 也保证同一时间只有一个会话占主屏，另一方等 30 秒后拿到可读错误，Orb 把这句原因告诉用户。
-- A0 验证：`@dsh-orb-android/background-agent` 在 PRoot Node 下能加载，能以 `standard` 建后台会话。
+- A0 验证：`@dsh-orb-android/background-agent` 在 PRoot Node 下能加载，能以 `phone-background` 建后台会话。
 - 完成后：Orb 会话收到 followup → 面板更新；App 不在前台时由 `ChatNotifier` 发「后台任务完成」。
 
 ### 5.4 要串起来的流程
+
+> 2026-11-12：完整的「长按球录音 → 松手发送」尚未做；已实现的是现有 AskBar「问一句」发送时隐藏输入条和宠物、收起键盘并截图附在消息里。下面的原生球手势、波形窗、面板仍是 A0–A3 的目标。
 
 现有零件是分开的，Orb 要做一条原子流程：
 
@@ -191,7 +213,7 @@
 
 ### 6.2 接入方式
 
-- 打包：dsh-Go 现在没有安装额外插件 tgz 的机制，要新增（18 第 2 节）：在 `build-runtime.sh` 里用现有带 sha256 校验的 `fetch` 下载 `dsh-mesh` release 里的 `@dsh-mesh/plugin` tgz，解到 `/opt/dsh-go/plugins/dsh-mesh`，哈希加进构建输入哈希；由 `dsh-go-bridge` 的 overlay 按路径注册为应用级插件。配置按 18 第 4.2 节：`platform: android`、`incomingPreset: standard`、`remoteToolGuard: ['mcp__phone__*']`、`receiveDir`。`remote_*` 工具与远程终端由插件内部关掉，手机仓库不用管。
+- 打包：dsh-Go 现在没有安装额外插件 tgz 的机制，要新增（18 第 2 节）：在 `build-runtime.sh` 里用现有带 sha256 校验的 `fetch` 下载 `dsh-mesh` release 里的 `@dsh-mesh/plugin` tgz，解到 `/opt/dsh-go/plugins/dsh-mesh`，哈希加进构建输入哈希；由 `dsh-go-bridge` 的 overlay 按路径注册为应用级插件。配置按 18 第 4.2 节：`platform: android`、`incomingPreset: phone-background`、`remoteToolGuard: ['mcp__phone__*']`、`receiveDir`。`remote_*` 工具与远程终端由插件内部关掉，手机仓库不用管。
 - 只用 Relay：`@dsh-mesh/plugin` 不随包发布 WebRTC 原生库，只用 Relay 时也不会加载（18 第 1 节）。
 - 身份与配对状态在 PRoot 的 `/root/.dsh/dsh-mesh/`，随 App 数据保存；App 升级、引擎重装都不能丢。
 - App 内 Flutter「互联」页通过本机引擎的 `/.dsh-mesh/v1/*` 接口（`127.0.0.1:3080`）读写，接口清单见 18 第 4.3 节：
@@ -208,7 +230,7 @@
 
 ### 6.4 手机作为被调用端
 
-- 其他设备派来的会话跑 dsh-Go 的 `standard` preset。它会继承 `mcp__phone__*`，所以要拦截。
+- 其他设备派来的会话跑 dsh-Go 的 `phone-background` preset。它会继承 `mcp__phone__*`，所以要拦截。
 - **屏幕操作拦截（D-12）**：`dsh-mesh` 的 `packages/mesh/guard.ts` 在应用级挂 `ctx.tools.guard`（dsh-orb-cordis 仓库 `code-agent-registry.ts:122` 用的是同一机制）。Host 侧 bridge 记录由远程 peer `session/create` 或 `session/prompt` 触发的会话；这些会话调用配置 `remoteToolGuard` 里的工具（手机填 `mcp__phone__*`）时，如果偏好 `allowGuardedTools` 关着，就拒绝并返回「这台手机不允许其他设备操作屏幕」。手机互联页把 `allowGuardedTools` 显示为「允许其他设备操作本机屏幕」。D-5 之后远程本来就只能 prompt 自己创建的会话，所以「按会话创建者记录」这条判定是充分的，不需要按轮次再判一次。
 - 开关打开时：dsh-Go 的控制条照常显示，并加一行「来自 <设备名> 的任务正在操作手机」；`SafetyGate` 不变，敏感操作仍在手机上确认。
 - **手机文件作为附件**：打开「访问手机文件」后，后台 Agent 可用 Shell 在 `/sdcard/DCIM/…` 找照片，拷到 `.mesh-out/<taskId>/`，由发起端按 4.5 的流程取回。全程不操作手机界面。

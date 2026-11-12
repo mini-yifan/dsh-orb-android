@@ -29,7 +29,7 @@ import 'support/session_sync_host.dart';
 class _QueuedCreate extends FakeSessions {
   final pending = <Completer<String>>[];
   @override
-  Future<String> create({bool autoApprove = true}) {
+  Future<String> create({bool autoApprove = true, String? agentPreset}) {
     final next = Completer<String>();
     pending.add(next);
     return next.future;

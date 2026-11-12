@@ -3,12 +3,14 @@
 // history, prompt receipts and retries. No background host is selected here.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
+import '../state/attachments.dart';
 import '../state/chat_state.dart';
 import '../state/compose_inbox.dart';
 import '../state/connection_state.dart';
@@ -50,13 +52,22 @@ final petHostChoicesProvider = Provider<List<PetHostChoice>>((ref) {
   return [for (final (host, label) in hosts) PetHostChoice(host, snippet(label, max: 40)!, current: host == current)];
 });
 
+/// The floating ball's own preset: Computer Use on this phone
+/// (runtime/bridge/dsh-go-bridge/cordis.patch.yml). A runtime without it falls
+/// back to the host default instead of failing the send.
+const orbPhonePreset = 'orb-phone';
+
 class _AskOffer {
-  _AskOffer(this.id, this.host, this.connection, this.generation, this.sessionId);
+  _AskOffer(this.id, this.host, this.connection, this.generation, this.sessionId, this.local);
   final int id;
   final HostRef host;
   final HostConnection? connection;
   final MuxGeneration? generation;
   final String? sessionId;
+
+  /// This phone's own engine: the only host that has [orbPhonePreset] and the
+  /// only one whose sends are paired with a screenshot of this phone's screen.
+  final bool local;
   String? created;
 }
 
@@ -77,7 +88,7 @@ class PetOverlayActions {
     final args = call.arguments is Map ? call.arguments as Map : const {};
     switch (call.method) {
       case 'askTarget':
-        return _target();
+        return _target(args['fresh'] == true);
       case 'ask':
         return _send(args);
       case 'answer':
@@ -141,7 +152,7 @@ class PetOverlayActions {
     }
   }
 
-  Future<Map<String, Object?>> _target() async {
+  Future<Map<String, Object?>> _target(bool fresh) async {
     final host = ref.read(activeHostProvider);
     final connection = ref.read(activeConnectionProvider).value;
     final generation = connection?.client.mux.generation;
@@ -150,7 +161,14 @@ class PetOverlayActions {
     final session = pet?.host == host
         ? sessions.where((s) => s.sessionId == pet!.sessionId && !s.running && s.agentAvailable).firstOrNull
         : null;
-    final offer = _AskOffer(++_next, host, connection, generation, session?.sessionId);
+    // The Computer Use preset only exists in this phone's engine. On a remote
+    // host the ball keeps its old behavior: the host's default preset, no
+    // screenshot of this phone's screen.
+    final local = host == HostRef.local;
+    // No current conversation means the bar is on 「新对话」, which is the Orb.
+    final wantFresh = fresh || session == null;
+    final shot = local && (wantFresh || session.projections.agentPreset == orbPhonePreset);
+    final offer = _AskOffer(++_next, host, connection, generation, session?.sessionId, local);
     _offer = offer;
     final voice = await _voice();
     final label = snippet(connection?.label ?? hostLabel(host.kind, host.name), max: 40)!;
@@ -163,6 +181,8 @@ class PetOverlayActions {
           'sessionId': session.sessionId,
           'line': '${snippet(session.title, max: 20) ?? appL10n.commonUntitledChat} · $label',
         },
+      // The native bar hides itself and attaches a capture of what is behind it.
+      'shot': shot,
       if (connection == null || generation == null) 'problem': appL10n.commonEngineUnreachable,
       'voice': ref.read(localConnectionProvider).value?.client.mux.generation == null
           ? 'off'
@@ -177,6 +197,10 @@ class PetOverlayActions {
     final offer = _offer;
     final text = args['text'];
     final fresh = args['fresh'] == true;
+    // The native bar captures before it knows whether this send will be accepted;
+    // read and delete the cache slot on every path, then keep the image only for
+    // the Orb.
+    final captured = await _screenshotAttachments(args['screenshot']);
     if (_sending) return problem(appL10n.petActionSending);
     if (offer == null ||
         args['offer'] != offer.id ||
@@ -188,9 +212,10 @@ class PetOverlayActions {
     }
     if (offer.connection == null || offer.generation == null) return problem(appL10n.commonEngineUnreachable);
     if (text is! String || text.trim().isEmpty || text.length > 4000) return problem(appL10n.petActionSendFailed);
+    final orb = offer.local && (fresh || _presetOf(offer.sessionId) == orbPhonePreset);
     _sending = true;
     try {
-      final id = fresh ? offer.created ??= await ref.read(sessionsProvider.notifier).create() : offer.sessionId!;
+      final id = fresh ? offer.created ??= await _create(offer) : offer.sessionId!;
       if (!_current(offer)) return problem(appL10n.petActionTargetChanged);
       final chat = ref.read(chatProvider(id).notifier);
       if (!await chat.waitForSync(isCurrent: () => _current(offer)) || !_current(offer)) {
@@ -200,9 +225,10 @@ class PetOverlayActions {
       if (state.running || state.openApproval != null || state.questions.isNotEmpty) {
         return problem(appL10n.petActionBusy);
       }
+      if (!_current(offer)) return problem(appL10n.petActionTargetChanged);
       final target = PetTarget(offer.host, id);
       ref.read(petAskedProvider.notifier).add(target);
-      final sent = await chat.send(text);
+      final sent = await chat.send(text, attachments: orb ? captured : const <DraftAttachment>[]);
       if (!ref.mounted) return problem(appL10n.petActionSendFailed);
       if (!sent) {
         ref.read(petAskedProvider.notifier).take(target);
@@ -219,6 +245,63 @@ class PetOverlayActions {
       _sending = false;
     }
   }
+
+  /// The preset a conversation currently runs, if the list has caught up.
+  String? _presetOf(String? sessionId) {
+    if (sessionId == null) return null;
+    final sessions = ref.read(sessionsProvider).value ?? const <SessionSummary>[];
+    return sessions.where((s) => s.sessionId == sessionId).firstOrNull?.projections.agentPreset;
+  }
+
+  /// A new chat for the ball: this phone's Orb preset, else the host default.
+  /// A runtime that predates the preset still gets a usable chat.
+  Future<String> _create(_AskOffer offer) async {
+    final sessions = ref.read(sessionsProvider.notifier);
+    if (offer.local) {
+      try {
+        return await sessions.create(agentPreset: orbPhonePreset);
+      } on DshRemoteException catch (error) {
+        if (!error.code.startsWith('agent-preset/')) rethrow;
+        // agent-preset/not-found or /invalid: fall through to the host default.
+      }
+    }
+    return sessions.create();
+  }
+
+  /// The native bar's capture, read and then dropped from the cache. Only an
+  /// inline image DSH accepts rides along; a missing, secure or unreadable
+  /// screen still sends the text.
+  Future<List<DraftAttachment>> _screenshotAttachments(Object? raw) async {
+    if (raw is! String || raw.isEmpty) return const [];
+    final file = File(raw);
+    try {
+      final size = await file.length();
+      if (size <= 0 || size > maxImageBytes) return const [];
+      final bytes = await file.readAsBytes();
+      final mediaType = inlineImageType(bytes);
+      if (mediaType == null) return const [];
+      final extension = switch (mediaType) {
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        _ => 'png',
+      };
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      return [DraftAttachment(name: 'screen-$stamp.$extension', bytes: bytes, mediaType: mediaType)];
+    } catch (_) {
+      return const [];
+    } finally {
+      try {
+        await file.delete();
+      } catch (_) {
+        // The cache slot may already be gone; the OS reclaims the rest.
+      }
+    }
+  }
+
+  /// A capture that arrived for a target that will not use it is read and
+  /// deleted by [_screenshotAttachments]; nothing else touches the cache slot.
 
   /// Only the phone's installed SenseVoice model. A remote or cloud selection
   /// must never silently receive a recording from the floating microphone.

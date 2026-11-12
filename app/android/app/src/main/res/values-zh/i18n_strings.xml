@@ -153,6 +153,7 @@
     <string name="pet_ask_send">发送</string>
     <string name="pet_ask_hold_to_talk">按住说话</string>
     <string name="pet_ask_sending">正在发送</string>
+    <string name="pet_ask_capturing">正在截取屏幕</string>
     <string name="pet_ask_failed">没发出去</string>
     <string name="pet_ask_listening">正在听，松开结束</string>
     <string name="pet_ask_transcribing">正在识别</string>

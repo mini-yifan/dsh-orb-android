@@ -592,10 +592,11 @@ class SessionsController extends AsyncNotifier<List<SessionSummary>> {
   /// Creates a session in the workspace the drawer shows (else the default
   /// directory) and returns its id. [autoApprove] false keeps the host's
   /// permission preset even when 自动批准命令 is on (the companion's).
-  Future<String> create({bool autoApprove = true}) async {
+  /// [agentPreset] picks the host-side composition; null keeps the host default.
+  Future<String> create({bool autoApprove = true, String? agentPreset}) async {
     final conn = ref.read(activeConnectionProvider).value;
     if (conn == null) throw StateError('not connected');
-    return createForConnection(conn, autoApprove: autoApprove, isCurrent: () => true);
+    return createForConnection(conn, autoApprove: autoApprove, agentPreset: agentPreset, isCurrent: () => true);
   }
 
   /// Creates for a captured connection. The caller retires its intent through
@@ -604,6 +605,7 @@ class SessionsController extends AsyncNotifier<List<SessionSummary>> {
     HostConnection conn, {
     required bool Function() isCurrent,
     bool autoApprove = true,
+    String? agentPreset,
   }) async {
     final owner = ref;
     void checkCurrent() {
@@ -626,6 +628,7 @@ class SessionsController extends AsyncNotifier<List<SessionSummary>> {
       conn.client,
       workspaceId,
       cwd: conn.isLocal ? localWorkspaceDir : conn.workingDirectory,
+      agentPreset: agentPreset,
       checkCurrent: checkCurrent,
     );
     checkCurrent();
