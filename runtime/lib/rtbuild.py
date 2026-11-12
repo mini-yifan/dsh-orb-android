@@ -703,10 +703,11 @@ def _plugin_pairs(values, option):
     return out
 
 
-def parse_plugins(specs, entry_specs=(), sha_specs=(), prefix=DSH_PLUGIN_PREFIX):
-    """--plugin NAME=DIR plus optional NAME=REL / NAME=SHA256 -> validated plugin descriptors."""
+def parse_plugins(specs, entry_specs=(), sha_specs=(), config_specs=(), prefix=DSH_PLUGIN_PREFIX):
+    """--plugin NAME=DIR plus optional NAME=REL / NAME=SHA256 / NAME=JSON -> plugin descriptors."""
     entries = _plugin_pairs(entry_specs, "plugin-entry")
     shas = _plugin_pairs(sha_specs, "plugin-sha256")
+    configs = _plugin_pairs(config_specs, "plugin-config")
     prefix = posixpath.normpath(prefix)
     if not prefix.startswith("/opt/dsh-go/") or ".." in prefix.split("/"):
         raise SystemExit("plugin prefix must stay inside the app-owned /opt/dsh-go tree: " + prefix)
@@ -737,6 +738,14 @@ def parse_plugins(specs, entry_specs=(), sha_specs=(), prefix=DSH_PLUGIN_PREFIX)
         sha256 = shas.get(name, "")
         if sha256 and not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
             raise SystemExit("plugin %s: --plugin-sha256 must be a 64-character hex digest" % name)
+        config = {}
+        if name in configs:
+            try:
+                config = json.loads(configs[name])
+            except ValueError as error:
+                raise SystemExit("plugin %s: --plugin-config is not JSON: %s" % (name, error))
+            if not isinstance(config, dict):
+                raise SystemExit("plugin %s: --plugin-config must be a JSON object" % name)
         plugins.append({
             "name": name,
             "version": pkg.get("version") or "",
@@ -744,10 +753,11 @@ def parse_plugins(specs, entry_specs=(), sha_specs=(), prefix=DSH_PLUGIN_PREFIX)
             "entry": entry,
             "rootfsPath": posixpath.join(prefix, name),
             "sha256": sha256.lower(),
+            "config": config,
         })
-    unknown = (set(entries) | set(shas)) - seen
+    unknown = (set(entries) | set(shas) | set(configs)) - seen
     if unknown:
-        raise SystemExit("--plugin-entry/--plugin-sha256 for unconfigured plugins: " + ", ".join(sorted(unknown)))
+        raise SystemExit("--plugin-entry/--plugin-sha256/--plugin-config for unconfigured plugins: " + ", ".join(sorted(unknown)))
     slugs = [plugin_slug(p["name"]) for p in plugins]
     if len(set(slugs)) != len(slugs):
         raise SystemExit("plugin names produce duplicate overlay ids: " + ", ".join(slugs))
@@ -756,7 +766,7 @@ def parse_plugins(specs, entry_specs=(), sha_specs=(), prefix=DSH_PLUGIN_PREFIX)
 
 def public_plugin(plugin):
     """The plugin facts that may be written into the rootfs / manifest (no host paths)."""
-    return {key: plugin[key] for key in ("name", "version", "entry", "rootfsPath", "sha256")}
+    return {key: plugin[key] for key in ("name", "version", "entry", "rootfsPath", "sha256", "config")}
 
 
 def cmd_extract_plugin(args):
@@ -870,7 +880,7 @@ def cmd_extract_plugin(args):
 
 def cmd_render_overlay(args):
     """Write the overlay build-runtime.sh would ship (debugging and host checks, no rootfs)."""
-    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_prefix)
+    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_config, args.plugin_prefix)
     runtime_info = json.loads(args.runtime_info) if args.runtime_info else {"runtimeVersion": "render-overlay"}
     entries = overlay_entries(runtime_info, with_python=args.python, with_pnpm=args.pnpm,
                               with_bridge=args.bridge, plugins=plugins)
@@ -1085,12 +1095,14 @@ def bridge_app_plugin_rows(plugins):
         if payload.startswith("- ") or payload.startswith("  "):
             template.append("    " + payload)
     block = "\n".join(template)
-    if "@DSH_PLUGIN_SLUG@" not in block or "@DSH_PLUGIN_ENTRY@" not in block:
-        raise SystemExit("app plugin template needs @DSH_PLUGIN_SLUG@ and @DSH_PLUGIN_ENTRY@")
+    if "@DSH_PLUGIN_SLUG@" not in block or "@DSH_PLUGIN_ENTRY@" not in block or "@DSH_PLUGIN_CONFIG@" not in block:
+        raise SystemExit("app plugin template needs @DSH_PLUGIN_SLUG@, @DSH_PLUGIN_ENTRY@ and @DSH_PLUGIN_CONFIG@")
     rows = []
     for plugin in plugins:
+        config = json.dumps(plugin.get("config") or {}, ensure_ascii=False, separators=(",", ":"))
         rows.append(block.replace("@DSH_PLUGIN_SLUG@", plugin_slug(plugin["name"]))
-                         .replace("@DSH_PLUGIN_ENTRY@", plugin_entry_path(plugin)))
+                         .replace("@DSH_PLUGIN_ENTRY@", plugin_entry_path(plugin))
+                         .replace("@DSH_PLUGIN_CONFIG@", config))
     return BRIDGE_APP_PLUGIN_MARKER + "\n".join(rows) + "\n"
 
 
@@ -1239,7 +1251,7 @@ class HashingWriter:
 def cmd_assemble(args):
     abi = args.abi
     machine = ABI[abi]["machine"]
-    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_prefix)
+    plugins = parse_plugins(args.plugin, args.plugin_entry, args.plugin_sha256, args.plugin_config, args.plugin_prefix)
     entries = {}
     report = {"abi": abi, "dropped": {}, "droppedSamples": {}, "elf": [], "warnings": [],
               "convertedHardlinks": [], "relativizedSymlinks": 0, "installScriptsNotRun": []}
@@ -1841,6 +1853,8 @@ def main():
                    help="NAME=REL entry file inside a --plugin dir (default: package.json main)")
     p.add_argument("--plugin-sha256", action="append", default=[],
                    help="NAME=SHA256 of the plugin tgz, recorded in the build report and manifest")
+    p.add_argument("--plugin-config", action="append", default=[],
+                   help="NAME=JSON object passed as the app plugin row's config")
     p.add_argument("--plugin-prefix", default=DSH_PLUGIN_PREFIX,
                    help="rootfs parent for plugin bundles (default " + DSH_PLUGIN_PREFIX + ")")
     p.set_defaults(fn=cmd_assemble)
@@ -1863,6 +1877,7 @@ def main():
     p.add_argument("--plugin", action="append", default=[], help="NAME=DIR (repeats)")
     p.add_argument("--plugin-entry", action="append", default=[], help="NAME=REL (repeats)")
     p.add_argument("--plugin-sha256", action="append", default=[], help="NAME=SHA256 (repeats)")
+    p.add_argument("--plugin-config", action="append", default=[], help="NAME=JSON (repeats)")
     p.add_argument("--plugin-prefix", default=DSH_PLUGIN_PREFIX)
     p.add_argument("--python", action="store_true", help="include the Python symlinks")
     p.add_argument("--out", help="write here instead of stdout")

@@ -11,7 +11,9 @@
 #   # bundle a third-party plugin tgz (default: the local tooling/plugin-probe fixture)
 #   DSH_PLUGIN_NAME=@dsh-mesh/plugin DSH_PLUGIN_VERSION=0.1.0 \
 #   DSH_PLUGIN_URL=https://.../plugin.tgz DSH_PLUGIN_SHA256=<sha256> \
-#   DSH_PLUGIN_ENTRY=lib/index.js runtime/build-runtime.sh arm64-v8a
+#   DSH_PLUGIN_ENTRY=lib/index.mjs \
+#   DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"standard"}' \
+#   runtime/build-runtime.sh arm64-v8a
 #   # build without a plugin: DSH_PLUGIN_URL=
 #   # check the plugin path only (fetch/verify/extract/render overlay; no rootfs):
 #   RUNTIME_PLUGIN_CHECK=1 runtime/build-runtime.sh
@@ -85,6 +87,7 @@ DSH_PLUGIN_TGZ="${DSH_PLUGIN_TGZ:-$REPO/tooling/plugin-probe/dist/dsh-orb-androi
 DSH_PLUGIN_URL_EXPLICIT="${DSH_PLUGIN_URL+x}"          # distinguishes "unset" from "explicitly empty"
 DSH_PLUGIN_URL="${DSH_PLUGIN_URL-file://$DSH_PLUGIN_TGZ}"
 DSH_PLUGIN_SHA256="${DSH_PLUGIN_SHA256:-}"             # required for http(s); file:// may omit
+DSH_PLUGIN_CONFIG="${DSH_PLUGIN_CONFIG:-}"             # optional JSON object for the app plugin row
 
 UBUNTU_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release"
 NODE_MIRROR="https://npmmirror.com/mirrors/node"
@@ -213,10 +216,15 @@ plugin_check() {
   "${PY[@]}" extract-plugin --tgz "$PLUGIN_TGZ_CACHE" --sha256 "$PLUGIN_SHA" \
     --name "$DSH_PLUGIN_NAME" --version "$DSH_PLUGIN_VERSION" --entry "$DSH_PLUGIN_ENTRY" \
     --prefix "$DSH_PLUGIN_PREFIX" --out "$work/unpacked" --out-json "$work/plugin.json" >&2
+  local -a config_args=()
+  if [[ -n "$DSH_PLUGIN_CONFIG" ]]; then
+    config_args=(--plugin-config "$DSH_PLUGIN_NAME=$DSH_PLUGIN_CONFIG")
+  fi
   "${PY[@]}" render-overlay --bridge --pnpm \
     --plugin "$DSH_PLUGIN_NAME=$work/unpacked" \
     --plugin-entry "$DSH_PLUGIN_NAME=$DSH_PLUGIN_ENTRY" \
     --plugin-sha256 "$DSH_PLUGIN_NAME=$PLUGIN_SHA" \
+    ${config_args[@]+"${config_args[@]}"} \
     --plugin-prefix "$DSH_PLUGIN_PREFIX" \
     --runtime-info '{"runtimeVersion":"plugin-check"}' \
     --out "$work/dsh-web.patch.yml" >&2
@@ -518,6 +526,9 @@ PYEOF
                  --plugin-entry "$DSH_PLUGIN_NAME=$DSH_PLUGIN_ENTRY"
                  --plugin-sha256 "$DSH_PLUGIN_NAME=$PLUGIN_SHA"
                  --plugin-prefix "$DSH_PLUGIN_PREFIX")
+    if [[ -n "$DSH_PLUGIN_CONFIG" ]]; then
+      plugin_args+=(--plugin-config "$DSH_PLUGIN_NAME=$DSH_PLUGIN_CONFIG")
+    fi
   fi
 
   # -- runtimeVersion: hash of every input + the recipe itself --
@@ -528,6 +539,7 @@ PYEOF
       echo "$RUNTIME_REVISION $abi $DSH_VERSION $NODE_VERSION $PNPM_VERSION $UBUNTU_VERSION $COMPRESS $XZ_PRESET $PRUNE_DEV_METADATA $SOURCE_DATE_EPOCH"
       # Plugin identity and bytes are engine inputs: a new version/content changes runtimeVersion.
       echo "plugin ${PLUGIN_ENABLED} ${DSH_PLUGIN_NAME} ${DSH_PLUGIN_VERSION} ${DSH_PLUGIN_ENTRY} ${DSH_PLUGIN_PREFIX} ${PLUGIN_SHA}"
+      echo "plugin-config ${DSH_PLUGIN_CONFIG}"
       sha256 "$base"; sha256 "$node"; sha256 "$python"; sha256sum "${extra_debs[@]}" | cut -d' ' -f1
       sha256 "$proot_deb"; sha256 "$talloc_deb"; sha256 "$shmem_deb"
       sha256 "$lockfile"; sha256 "$pnpm_lockfile"; sha256 "$HERE/build-runtime.sh"; sha256 "$HERE/lib/rtbuild.py"

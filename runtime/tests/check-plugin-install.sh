@@ -123,7 +123,8 @@ shared = text.index("    # --- shared rows ---")
 app = text.index("    # --- app plugin rows ---")
 assert shared < app, "app plugin rows must follow the shared rows"
 row = ("    - id: app-plugin-dsh-orb-android-plugin-probe\n"
-       "      name: '/opt/dsh-go/plugins/@dsh-orb-android/plugin-probe/lib/index.js'\n")
+       "      name: '/opt/dsh-go/plugins/@dsh-orb-android/plugin-probe/lib/index.js'\n"
+       "      config: {}\n")
 assert row in text[app:], "materialised app plugin row is missing or wrong"
 assert "@DSH_PLUGIN_" not in text, "template placeholder leaked into the overlay"
 assert text.index("- id: dsh-go-bridge") < app, "dsh-go-bridge must be inserted before app plugin rows"
@@ -151,6 +152,7 @@ rows = lists[0]
 assert rows[0]["id"] == "dsh-go-bridge", rows[0]
 assert rows[-1]["id"] == "app-plugin-dsh-orb-android-plugin-probe", rows[-1]
 assert rows[-1]["name"] == "/opt/dsh-go/plugins/@dsh-orb-android/plugin-probe/lib/index.js", rows[-1]
+assert rows[-1]["config"] == {}, rows[-1]
 print("  PyYAML structure: ok")
 PY
 pass "app plugin row is after the shared rows, inside the insert list, absolute path"
@@ -163,7 +165,7 @@ spec = importlib.util.spec_from_file_location("rtbuild_plugin_check", rtbuild)
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
-plugins = module.parse_plugins([name + "=" + unpacked], [name + "=lib/index.js"], [], "/opt/dsh-go/plugins")
+plugins = module.parse_plugins([name + "=" + unpacked], [name + "=lib/index.js"], [], [], "/opt/dsh-go/plugins")
 entries = module.overlay_entries({}, with_pnpm=True, with_bridge=True, plugins=plugins)
 seam = entries["opt/dsh-go/plugins/node_modules"]
 assert seam.kind == "symlink", seam.kind

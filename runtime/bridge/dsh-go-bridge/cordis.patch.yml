@@ -184,9 +184,10 @@
     # --- app plugin rows ---
     # Materialised by runtime/lib/rtbuild.py for /etc/dsh-app/dsh-web.patch.yml only: one row per
     # third-party plugin tgz unpacked under /opt/dsh-go/plugins by runtime/build-runtime.sh
-    # (DSH_PLUGIN_NAME/URL/SHA256/ENTRY). The rows join the same root `insert` list as the rows
+    # (DSH_PLUGIN_NAME/URL/SHA256/ENTRY/CONFIG). The rows join the same root `insert` list as the rows
     # above, after dsh-go-bridge. Dependencies come from each plugin's own `inject`, not from
     # position. The block stays commented out in this bundle so `dsh plugin add dsh-go-bridge` on
     # a host without /opt/dsh-go/plugins is unaffected; only the app overlay gets active rows.
     # - id: app-plugin-@DSH_PLUGIN_SLUG@
     #   name: '@DSH_PLUGIN_ENTRY@'
+    #   config: @DSH_PLUGIN_CONFIG@

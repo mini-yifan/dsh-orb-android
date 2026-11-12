@@ -91,22 +91,29 @@ runtime/test-host.sh
 
 ## 换成真实的 `@dsh-mesh/plugin`
 
-只替换构建变量，不改脚本：
+在 `dsh-mesh` 仓库生成自包含 tgz（`bundle/*.mjs` + `package.json` + `cordis.patch.yml` + `dsh-plugin.json`，可复现）：
+
+```sh
+cd ../dsh-mesh
+python3 packages/mesh-plugin/scripts/pack-phone.py
+# -> packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.0.tgz
+```
+
+然后用这个 tarball 构建手机运行时：
 
 ```sh
 DSH_PLUGIN_NAME='@dsh-mesh/plugin' \
-DSH_PLUGIN_VERSION='<release 版本>' \
-DSH_PLUGIN_URL='https://<release 地址>/dsh-mesh-plugin-<版本>.tgz' \
-DSH_PLUGIN_SHA256='<tarball 的 sha256>' \
-DSH_PLUGIN_ENTRY='lib/index.js' \
+DSH_PLUGIN_VERSION='0.1.0' \
+DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.0.tgz' \
+DSH_PLUGIN_ENTRY='lib/index.mjs' \
+DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"standard"}' \
 bash runtime/build-runtime.sh arm64-v8a
 ```
 
-包名和入口以 tarball 里的 `package.json` 为准，不要照抄示例。例如当前 dsh-mesh 仓库
-`packages/plugin/package.json` 的 `name` 是 `ds-harness-remote`、`main` 是 `./dist/index.js`，
-对应 `DSH_PLUGIN_NAME=ds-harness-remote`、`DSH_PLUGIN_ENTRY=dist/index.js`；发布成
-`@dsh-mesh/plugin` 后再换成新名字。`DSH_PLUGIN_VERSION` 必须和 `package.json.version` 完全一致，
-否则 `extract-plugin` 会拒绝解包。
+- `platform: android` 让插件按手机默认值处理 `remoteToolGuard`（`mcp__phone__*`），并让其他设备看到的节点平台是 android。
+- `incomingPreset: standard` 让其他设备派来的任务跑 dsh-Go 的标准模式 preset。
+- 真实 tgz 不含 `node_modules`；bundle 里的 werift 是 Relay-only 的纯 JS 代码，v0 不启用 WebRTC 就不会加载原生后端。
+- 包名和入口以 tarball 里的 `package.json` 为准；`DSH_PLUGIN_VERSION` 必须和 `package.json.version` 完全一致，否则 `extract-plugin` 会拒绝解包。
 
 注意：
 
