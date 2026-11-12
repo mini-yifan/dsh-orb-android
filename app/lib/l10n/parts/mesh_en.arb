@@ -1,0 +1,61 @@
+{
+  "meshTitle": "Interconnect",
+  "meshSubtitle": "Join this phone to multiple devices",
+  "meshIntro": "Once joined, this phone can view, prompt, and stop task sessions on other devices.",
+  "meshEngineOff": "The local engine is not running. Start it before using Interconnect.",
+  "meshJoinTitle": "Join Interconnect",
+  "meshJoinHint": "Paste the pairing string from a computer, or scan the QR code on the admin page.",
+  "meshPairingLabel": "Pairing string",
+  "meshPairingEmpty": "Paste a pairing string first.",
+  "meshConnect": "Connect",
+  "meshScan": "Scan",
+  "meshScanTitle": "Scan pairing code",
+  "meshConnected": "Joined",
+  "meshThisPhone": "This phone",
+  "meshPeers": "Connected {online}/{total}",
+  "@meshPeers": {
+    "placeholders": {
+      "online": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "meshNoPeers": "No other devices yet. Create a pairing string on another device and join there.",
+  "meshRefresh": "Refresh",
+  "meshLeave": "Leave Interconnect",
+  "meshLeaveConfirm": "This phone will disappear from the other devices' Interconnect list.",
+  "meshRename": "Rename this phone",
+  "meshRenameHint": "New name for this phone",
+  "meshNameEmpty": "The name cannot be empty.",
+  "meshOnline": "Online",
+  "meshOffline": "Offline",
+  "meshRunning": "Running",
+  "meshWaitingApproval": "Waiting for approval",
+  "meshWaitingQuestion": "Waiting for answer",
+  "meshIdle": "Idle",
+  "meshFailed": "Failed",
+  "meshUnknown": "Unknown",
+  "meshReadOnly": "Read-only",
+  "meshShowMore": "Show {count} more",
+  "@meshShowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "meshShowLess": "Show less",
+  "meshNoSessions": "This workspace has no sessions yet.",
+  "meshEmptySession": "This session has no record yet.",
+  "meshReasoning": "Reasoning",
+  "meshTool": "Tool",
+  "meshResult": "Result",
+  "meshSendHint": "Send a command to this remote task session…",
+  "meshSending": "Sending…",
+  "meshStopped": "Stopped this turn",
+  "meshReadOnlyHint": "This session is view-only; only task sessions accept commands.",
+  "meshRequestFailed": "Request failed"
+}

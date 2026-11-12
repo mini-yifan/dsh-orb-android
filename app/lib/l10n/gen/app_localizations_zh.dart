@@ -9667,6 +9667,136 @@ class L10nZh extends L10n {
   }
 
   @override
+  String get meshTitle => '互联';
+
+  @override
+  String get meshSubtitle => '手机加入多设备互联';
+
+  @override
+  String get meshIntro => '加入后可以在这台手机上查看、输入和停止其他设备的任务会话。';
+
+  @override
+  String get meshEngineOff => '本机引擎未运行，先启动引擎再使用互联。';
+
+  @override
+  String get meshJoinTitle => '加入互联';
+
+  @override
+  String get meshJoinHint => '粘贴电脑上的配对串，或扫描管理页的二维码。';
+
+  @override
+  String get meshPairingLabel => '配对串';
+
+  @override
+  String get meshPairingEmpty => '请先粘贴配对串。';
+
+  @override
+  String get meshConnect => '连接';
+
+  @override
+  String get meshScan => '扫码';
+
+  @override
+  String get meshScanTitle => '扫描配对码';
+
+  @override
+  String get meshConnected => '已加入互联';
+
+  @override
+  String get meshThisPhone => '本机';
+
+  @override
+  String meshPeers(int online, int total) {
+    return '已连接 $online/$total';
+  }
+
+  @override
+  String get meshNoPeers => '还没有其他设备。在另一台设备上生成配对串并加入。';
+
+  @override
+  String get meshRefresh => '刷新';
+
+  @override
+  String get meshLeave => '退出互联';
+
+  @override
+  String get meshLeaveConfirm => '退出后这台手机将不再出现在其他设备的互联列表里。';
+
+  @override
+  String get meshRename => '修改本机名称';
+
+  @override
+  String get meshRenameHint => '新的本机名称';
+
+  @override
+  String get meshNameEmpty => '名称不能为空。';
+
+  @override
+  String get meshOnline => '在线';
+
+  @override
+  String get meshOffline => '离线';
+
+  @override
+  String get meshRunning => '进行中';
+
+  @override
+  String get meshWaitingApproval => '等待确认';
+
+  @override
+  String get meshWaitingQuestion => '等待回答';
+
+  @override
+  String get meshIdle => '空闲';
+
+  @override
+  String get meshFailed => '失败';
+
+  @override
+  String get meshUnknown => '状态未知';
+
+  @override
+  String get meshReadOnly => '只读';
+
+  @override
+  String meshShowMore(int count) {
+    return '展开其余 $count 个会话';
+  }
+
+  @override
+  String get meshShowLess => '收起';
+
+  @override
+  String get meshNoSessions => '这个工作区还没有会话。';
+
+  @override
+  String get meshEmptySession => '这个会话还没有记录。';
+
+  @override
+  String get meshReasoning => '思考';
+
+  @override
+  String get meshTool => '工具';
+
+  @override
+  String get meshResult => '结果';
+
+  @override
+  String get meshSendHint => '输入指令，交给远端任务会话…';
+
+  @override
+  String get meshSending => '发送中…';
+
+  @override
+  String get meshStopped => '已停止这一轮';
+
+  @override
+  String get meshReadOnlyHint => '这个会话只能查看；只有任务会话可以输入。';
+
+  @override
+  String get meshRequestFailed => '请求失败';
+
+  @override
   String get nearbyThisChat => '本对话';
 
   @override

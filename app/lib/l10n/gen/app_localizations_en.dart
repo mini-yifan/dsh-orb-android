@@ -10182,6 +10182,136 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get meshTitle => 'Interconnect';
+
+  @override
+  String get meshSubtitle => 'Join this phone to multiple devices';
+
+  @override
+  String get meshIntro => 'Once joined, this phone can view, prompt, and stop task sessions on other devices.';
+
+  @override
+  String get meshEngineOff => 'The local engine is not running. Start it before using Interconnect.';
+
+  @override
+  String get meshJoinTitle => 'Join Interconnect';
+
+  @override
+  String get meshJoinHint => 'Paste the pairing string from a computer, or scan the QR code on the admin page.';
+
+  @override
+  String get meshPairingLabel => 'Pairing string';
+
+  @override
+  String get meshPairingEmpty => 'Paste a pairing string first.';
+
+  @override
+  String get meshConnect => 'Connect';
+
+  @override
+  String get meshScan => 'Scan';
+
+  @override
+  String get meshScanTitle => 'Scan pairing code';
+
+  @override
+  String get meshConnected => 'Joined';
+
+  @override
+  String get meshThisPhone => 'This phone';
+
+  @override
+  String meshPeers(int online, int total) {
+    return 'Connected $online/$total';
+  }
+
+  @override
+  String get meshNoPeers => 'No other devices yet. Create a pairing string on another device and join there.';
+
+  @override
+  String get meshRefresh => 'Refresh';
+
+  @override
+  String get meshLeave => 'Leave Interconnect';
+
+  @override
+  String get meshLeaveConfirm => 'This phone will disappear from the other devices\' Interconnect list.';
+
+  @override
+  String get meshRename => 'Rename this phone';
+
+  @override
+  String get meshRenameHint => 'New name for this phone';
+
+  @override
+  String get meshNameEmpty => 'The name cannot be empty.';
+
+  @override
+  String get meshOnline => 'Online';
+
+  @override
+  String get meshOffline => 'Offline';
+
+  @override
+  String get meshRunning => 'Running';
+
+  @override
+  String get meshWaitingApproval => 'Waiting for approval';
+
+  @override
+  String get meshWaitingQuestion => 'Waiting for answer';
+
+  @override
+  String get meshIdle => 'Idle';
+
+  @override
+  String get meshFailed => 'Failed';
+
+  @override
+  String get meshUnknown => 'Unknown';
+
+  @override
+  String get meshReadOnly => 'Read-only';
+
+  @override
+  String meshShowMore(int count) {
+    return 'Show $count more';
+  }
+
+  @override
+  String get meshShowLess => 'Show less';
+
+  @override
+  String get meshNoSessions => 'This workspace has no sessions yet.';
+
+  @override
+  String get meshEmptySession => 'This session has no record yet.';
+
+  @override
+  String get meshReasoning => 'Reasoning';
+
+  @override
+  String get meshTool => 'Tool';
+
+  @override
+  String get meshResult => 'Result';
+
+  @override
+  String get meshSendHint => 'Send a command to this remote task session…';
+
+  @override
+  String get meshSending => 'Sending…';
+
+  @override
+  String get meshStopped => 'Stopped this turn';
+
+  @override
+  String get meshReadOnlyHint => 'This session is view-only; only task sessions accept commands.';
+
+  @override
+  String get meshRequestFailed => 'Request failed';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override

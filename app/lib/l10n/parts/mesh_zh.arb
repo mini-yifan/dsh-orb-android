@@ -1,0 +1,61 @@
+{
+  "meshTitle": "互联",
+  "meshSubtitle": "手机加入多设备互联",
+  "meshIntro": "加入后可以在这台手机上查看、输入和停止其他设备的任务会话。",
+  "meshEngineOff": "本机引擎未运行，先启动引擎再使用互联。",
+  "meshJoinTitle": "加入互联",
+  "meshJoinHint": "粘贴电脑上的配对串，或扫描管理页的二维码。",
+  "meshPairingLabel": "配对串",
+  "meshPairingEmpty": "请先粘贴配对串。",
+  "meshConnect": "连接",
+  "meshScan": "扫码",
+  "meshScanTitle": "扫描配对码",
+  "meshConnected": "已加入互联",
+  "meshThisPhone": "本机",
+  "meshPeers": "已连接 {online}/{total}",
+  "@meshPeers": {
+    "placeholders": {
+      "online": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "meshNoPeers": "还没有其他设备。在另一台设备上生成配对串并加入。",
+  "meshRefresh": "刷新",
+  "meshLeave": "退出互联",
+  "meshLeaveConfirm": "退出后这台手机将不再出现在其他设备的互联列表里。",
+  "meshRename": "修改本机名称",
+  "meshRenameHint": "新的本机名称",
+  "meshNameEmpty": "名称不能为空。",
+  "meshOnline": "在线",
+  "meshOffline": "离线",
+  "meshRunning": "进行中",
+  "meshWaitingApproval": "等待确认",
+  "meshWaitingQuestion": "等待回答",
+  "meshIdle": "空闲",
+  "meshFailed": "失败",
+  "meshUnknown": "状态未知",
+  "meshReadOnly": "只读",
+  "meshShowMore": "展开其余 {count} 个会话",
+  "@meshShowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "meshShowLess": "收起",
+  "meshNoSessions": "这个工作区还没有会话。",
+  "meshEmptySession": "这个会话还没有记录。",
+  "meshReasoning": "思考",
+  "meshTool": "工具",
+  "meshResult": "结果",
+  "meshSendHint": "输入指令，交给远端任务会话…",
+  "meshSending": "发送中…",
+  "meshStopped": "已停止这一轮",
+  "meshReadOnlyHint": "这个会话只能查看；只有任务会话可以输入。",
+  "meshRequestFailed": "请求失败"
+}

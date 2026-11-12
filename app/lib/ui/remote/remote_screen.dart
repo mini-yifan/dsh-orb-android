@@ -15,6 +15,7 @@ import '../common/app_dialog.dart';
 import '../common/ask_ai.dart';
 import '../common/overview_card.dart';
 import '../common/status_chip.dart';
+import '../mesh/mesh_page.dart';
 import '../settings/settings_widgets.dart';
 import '../shell/page_frame.dart';
 import '../theme/app_icons.dart';
@@ -96,6 +97,17 @@ class RemoteScreen extends ConsumerWidget {
       subtitle: Text(l10n.remoteHostsIntro),
       actions: const [AskAiButton(AskAiTopic.remote)],
       children: [
+        SettingsSection(
+          title: l10n.meshTitle,
+          children: [
+            SettingsTile(
+              icon: AppIcons.remoteHost,
+              title: l10n.meshTitle,
+              subtitle: l10n.meshSubtitle,
+              onTap: () => push(const MeshPage()),
+            ),
+          ],
+        ),
         _ActiveCard(active: active),
         _RelaySection(onUse: (h) => _use(context, ref, h)),
         SettingsSection(

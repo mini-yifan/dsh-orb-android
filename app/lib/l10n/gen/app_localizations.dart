@@ -17846,6 +17846,258 @@ abstract class L10n {
   /// **'已保存 {count} 个文件到相册'**
   String mediaSavedFilesCount(int count);
 
+  /// No description provided for @meshTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'互联'**
+  String get meshTitle;
+
+  /// No description provided for @meshSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机加入多设备互联'**
+  String get meshSubtitle;
+
+  /// No description provided for @meshIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入后可以在这台手机上查看、输入和停止其他设备的任务会话。'**
+  String get meshIntro;
+
+  /// No description provided for @meshEngineOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机引擎未运行，先启动引擎再使用互联。'**
+  String get meshEngineOff;
+
+  /// No description provided for @meshJoinTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入互联'**
+  String get meshJoinTitle;
+
+  /// No description provided for @meshJoinHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'粘贴电脑上的配对串，或扫描管理页的二维码。'**
+  String get meshJoinHint;
+
+  /// No description provided for @meshPairingLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'配对串'**
+  String get meshPairingLabel;
+
+  /// No description provided for @meshPairingEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先粘贴配对串。'**
+  String get meshPairingEmpty;
+
+  /// No description provided for @meshConnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接'**
+  String get meshConnect;
+
+  /// No description provided for @meshScan.
+  ///
+  /// In zh, this message translates to:
+  /// **'扫码'**
+  String get meshScan;
+
+  /// No description provided for @meshScanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'扫描配对码'**
+  String get meshScanTitle;
+
+  /// No description provided for @meshConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已加入互联'**
+  String get meshConnected;
+
+  /// No description provided for @meshThisPhone.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机'**
+  String get meshThisPhone;
+
+  /// No description provided for @meshPeers.
+  ///
+  /// In zh, this message translates to:
+  /// **'已连接 {online}/{total}'**
+  String meshPeers(int online, int total);
+
+  /// No description provided for @meshNoPeers.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有其他设备。在另一台设备上生成配对串并加入。'**
+  String get meshNoPeers;
+
+  /// No description provided for @meshRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get meshRefresh;
+
+  /// No description provided for @meshLeave.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出互联'**
+  String get meshLeave;
+
+  /// No description provided for @meshLeaveConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出后这台手机将不再出现在其他设备的互联列表里。'**
+  String get meshLeaveConfirm;
+
+  /// No description provided for @meshRename.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改本机名称'**
+  String get meshRename;
+
+  /// No description provided for @meshRenameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'新的本机名称'**
+  String get meshRenameHint;
+
+  /// No description provided for @meshNameEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称不能为空。'**
+  String get meshNameEmpty;
+
+  /// No description provided for @meshOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线'**
+  String get meshOnline;
+
+  /// No description provided for @meshOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'离线'**
+  String get meshOffline;
+
+  /// No description provided for @meshRunning.
+  ///
+  /// In zh, this message translates to:
+  /// **'进行中'**
+  String get meshRunning;
+
+  /// No description provided for @meshWaitingApproval.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待确认'**
+  String get meshWaitingApproval;
+
+  /// No description provided for @meshWaitingQuestion.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待回答'**
+  String get meshWaitingQuestion;
+
+  /// No description provided for @meshIdle.
+  ///
+  /// In zh, this message translates to:
+  /// **'空闲'**
+  String get meshIdle;
+
+  /// No description provided for @meshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败'**
+  String get meshFailed;
+
+  /// No description provided for @meshUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态未知'**
+  String get meshUnknown;
+
+  /// No description provided for @meshReadOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读'**
+  String get meshReadOnly;
+
+  /// No description provided for @meshShowMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开其余 {count} 个会话'**
+  String meshShowMore(int count);
+
+  /// No description provided for @meshShowLess.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起'**
+  String get meshShowLess;
+
+  /// No description provided for @meshNoSessions.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个工作区还没有会话。'**
+  String get meshNoSessions;
+
+  /// No description provided for @meshEmptySession.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个会话还没有记录。'**
+  String get meshEmptySession;
+
+  /// No description provided for @meshReasoning.
+  ///
+  /// In zh, this message translates to:
+  /// **'思考'**
+  String get meshReasoning;
+
+  /// No description provided for @meshTool.
+  ///
+  /// In zh, this message translates to:
+  /// **'工具'**
+  String get meshTool;
+
+  /// No description provided for @meshResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'结果'**
+  String get meshResult;
+
+  /// No description provided for @meshSendHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入指令，交给远端任务会话…'**
+  String get meshSendHint;
+
+  /// No description provided for @meshSending.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送中…'**
+  String get meshSending;
+
+  /// No description provided for @meshStopped.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停止这一轮'**
+  String get meshStopped;
+
+  /// No description provided for @meshReadOnlyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个会话只能查看；只有任务会话可以输入。'**
+  String get meshReadOnlyHint;
+
+  /// No description provided for @meshRequestFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求失败'**
+  String get meshRequestFailed;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:
