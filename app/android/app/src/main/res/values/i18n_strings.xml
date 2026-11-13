@@ -264,6 +264,8 @@
     <string name="phone_log_clipboard_read">Read clipboard</string>
     <string name="phone_log_background_read">Read background display</string>
     <string name="phone_log_screen_read">Read screen</string>
+    <string name="phone_log_screenshot">Save screenshot</string>
+    <string name="phone_capturing_screen">DSH is taking a screenshot</string>
     <string name="phone_log_collect">Collect %1$s#%2$d</string>
     <string name="phone_log_scroll">Scroll %1$s %2$s</string>
     <string name="phone_log_tap_xy">Tap %1$s (%2$d,%3$d)</string>

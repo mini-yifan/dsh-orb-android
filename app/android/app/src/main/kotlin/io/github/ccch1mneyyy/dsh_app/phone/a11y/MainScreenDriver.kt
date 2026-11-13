@@ -254,6 +254,28 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         } finally { cap.recycle() }
     }
 
+    /** A clean, unnumbered screenshot for `screenshot`: the shooter's marks are empty and secret
+     * fields are still greyed out. No snapshot is published, so this read grants no element ids
+     * or coordinate permissions and cannot retire an existing observation. */
+    override fun captureImage(): ScreenSnapshot = synchronized(lock) {
+        val start = SystemClock.uptimeMillis()
+        availability().let { if (!it.ok) return ScreenSnapshot("${PhoneScreen.MAIN.prefix}0", "屏幕读不到：${it.reason}", null, null) }
+        val cap = capture()
+        try {
+            val window = cap.windows.singleOrNull()
+            val shot = shooter.shoot(window, cap.screen, emptyList(), secretFieldBounds(cap.windows),
+                OBSERVE_MS - (SystemClock.uptimeMillis() - start), image = true)
+            val bytes = shot.bytes
+            val secure = cap.hiddenWindowTitle != null || shot.secure || (bytes != null &&
+                ScreenFormat.index(cap.windows).any { it.fullText.contains("«银行卡") || it.fullText.contains("«身份证") })
+            val image = bytes.takeUnless { secure }
+            ScreenSnapshot("${PhoneScreen.MAIN.prefix}0", "", label(cap.packageName), cap.packageName,
+                secure = secure, image = image, imageMime = if (image == null) null else shot.mime,
+                readPackages = cap.windows.mapNotNull { it.packageName }.toSet(),
+                imageReadPackages = ImageReadSources.knownPackages(cap, shot, ownPackage))
+        } finally { cap.recycle() }
+    }
+
     private fun ocrAllowed(cap: Capture, snap: Snapshot, gen: Long): Boolean =
         !cancelled(gen) && availability().ok && latest === snap && visual.scope(snap.id) != null &&
             Build.VERSION.SDK_INT >= 34 && cap.windows.size == 1 && cap.visualComplete &&

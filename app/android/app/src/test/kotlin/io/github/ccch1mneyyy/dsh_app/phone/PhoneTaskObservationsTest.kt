@@ -30,6 +30,8 @@ class PhoneTaskObservationsTest {
         var focusPreparations = 0
         var duringPrepareFocus: () -> Unit = {}
         var focusPlan: FocusInput? = null
+        var imageCaptures = 0
+        override fun captureImage(): ScreenSnapshot { imageCaptures++; return ScreenSnapshot("s0", "", "App", "app") }
         override fun prepareFocusInput(screenId: String): Either<String, FocusInput> {
             focusPreparations++
             duringPrepareFocus()
@@ -382,6 +384,20 @@ class PhoneTaskObservationsTest {
         assertEquals(1, entered)
     }
 
+    @Test fun boundCaptureImageIsOwnerCheckedAndRegistersNoObservation() {
+        val tasks = PhoneTasks(); val physical = Driver(); val ledger = PhoneTaskObservations(tasks)
+        val bound = ledger.bind(physical, owner(tasks))
+        val snap = bound.captureImage()
+        assertEquals("s0", snap.id)
+        assertEquals(1, physical.imageCaptures)
+        // A clean screenshot publishes no element ids and must not authorize a tap target.
+        assertNull(bound.target("s0", 1))
+        // A stale owner is refused before the physical driver is entered again.
+        tasks.stop("replaced"); tasks.clearStop(); tasks.begin()
+        assertThrows(InterruptedException::class.java) { bound.captureImage() }
+        assertEquals(1, physical.imageCaptures)
+    }
+
     @Test fun everyDriverEntryPointHasAnExplicitOwnershipClassification() {
         // This inventories the interface, not the generated delegation class: Kotlin's
         // `by driver` emits methods even when the owner wrapper forgot an override.
@@ -390,6 +406,7 @@ class PhoneTaskObservationsTest {
         val ownerBoundEntries = setOf(
             "observe(boolean,boolean)",
             "observe(boolean,boolean,boolean)",
+            "captureImage()",
             "acceptVisualObservation(String)",
             "collect(String,int,int,String)",
             "collect(String,int,int,String,Function0)",

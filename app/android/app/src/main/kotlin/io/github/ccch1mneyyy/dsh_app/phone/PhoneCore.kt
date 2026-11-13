@@ -374,6 +374,7 @@ class PhoneCore(
                 PhoneToolCatalog.NOTIFY -> notify(a, owner)
                 PhoneToolCatalog.CLIPBOARD -> clipboard(a, owner)
                 PhoneToolCatalog.SCREEN -> screen(a, owner)
+                PhoneToolCatalog.SCREENSHOT -> screenshot(a, owner)
                 PhoneToolCatalog.COLLECT -> collect(a, owner)
                 FOCUS_TEXT -> focusText(a, scope, owner)
                 PhoneToolCatalog.TAP, PhoneToolCatalog.TYPE, PhoneToolCatalog.SCROLL, PhoneToolCatalog.TAP_XY -> act(name, a, scope, owner)
@@ -793,7 +794,7 @@ class PhoneCore(
             PhoneToolCatalog.APPS, PhoneToolCatalog.NOTIFY, PhoneToolCatalog.CLIPBOARD -> Either.Right(emptyList())
             PhoneToolCatalog.OPEN -> Either.Right(if (a.bool("background") == true)
                 listOf(PhoneScreen.MAIN, PhoneScreen.BACKGROUND) else listOf(PhoneScreen.MAIN))
-            PhoneToolCatalog.SCREEN -> Either.Right(listOf(if (a.bool("background") == true) PhoneScreen.BACKGROUND else PhoneScreen.MAIN))
+            PhoneToolCatalog.SCREEN, PhoneToolCatalog.SCREENSHOT -> Either.Right(listOf(if (a.bool("background") == true) PhoneScreen.BACKGROUND else PhoneScreen.MAIN))
             // Arbitrary system commands take the main/global unknown-app lease, without reading a screen.
             PhoneToolCatalog.INTENT, PhoneToolCatalog.ANDROID_SHELL -> Either.Right(listOf(PhoneScreen.MAIN))
             PhoneToolCatalog.HANDOFF -> Either.Right(if (lastScreen == PhoneScreen.BACKGROUND)
@@ -860,6 +861,46 @@ class PhoneCore(
             summary = "$summary ${snap.id}",
             decision = if (refused) "refused:read" else "ok",
         )
+    }
+
+    /** `screenshot`: save a clean screenshot to Downloads and copy it to the clipboard.
+     *  The exact same read policy as `screen` decides whether the frame may leave the driver. */
+    private fun screenshot(a: Args, owner: PhoneTasks.Owner): Out {
+        if (!current(owner)) return stoppedOut("screenshot")
+        val which = if (a.bool("background") == true) PhoneScreen.BACKGROUND else PhoneScreen.MAIN
+        val summary = ui.get("phone_log_screenshot", "保存截图") // l10n:keep test default
+        val driver = when (val d = driverFor(which, owner)) {
+            is Either.Left -> return Out(d.value, error = true, summary = summary, decision = "unavailable")
+            is Either.Right -> d.value
+        }
+        if (env.isLocked()) return locked(summary)
+        lastScreen = which
+        say(owner, ui.get("phone_capturing_screen", "DSH 正在截屏")) // l10n:keep test default
+        if (!current(owner)) return stoppedOut(summary)
+        val snap = driver.captureImage()
+        if (!current(owner) || !tasks.setAppIfCurrent(owner, snap.appLabel)) return stoppedOut(summary)
+        // filterScreen drops the image for deny-listed apps, secure pages, card / ID numbers,
+        // and any image source that is not allowed to be read. Never save a refused frame.
+        val shown = safety.filterScreen(snap)
+        val jpeg = shown.image
+        if (jpeg == null || shown.imageMime != "image/jpeg") {
+            // l10n:keep agent tool result
+            return Out("这一屏没有可保存的截图（安全窗口、受保护页面或系统未能截图），没有写入文件和剪贴板。",
+                error = true, screen = shown, app = snap.appLabel ?: snap.packageName,
+                summary = summary, decision = "refused:read")
+        }
+        val saved = try {
+            env.system().saveScreenshot(jpeg)
+        } catch (e: Exception) {
+            // l10n:keep agent tool result
+            return Out("截图已取得，但保存失败：${e.javaClass.simpleName}。请检查存储权限或稍后再试。",
+                error = true, screen = shown, app = snap.appLabel ?: snap.packageName,
+                summary = summary, decision = "error")
+        }
+        // l10n:keep agent tool result
+        val clipboard = if (saved.clipboard) "，并已复制到剪贴板，可以直接粘贴" else "；剪贴板写入失败，文件仍已保存"
+        return Out("已把截图保存到 ${saved.path}$clipboard。", screen = shown,
+            app = snap.appLabel ?: snap.packageName, summary = summary, decision = "ok")
     }
 
     private fun collect(a: Args, owner: PhoneTasks.Owner): Out {
@@ -1351,7 +1392,7 @@ class PhoneCore(
             PhoneToolCatalog.APPS -> 15_000L
             PhoneToolCatalog.NOTIFY, PhoneToolCatalog.CLIPBOARD -> 10_000L
             PhoneToolCatalog.OPEN, PhoneToolCatalog.INTENT -> 25_000L
-            PhoneToolCatalog.SCREEN -> 12_000L
+            PhoneToolCatalog.SCREEN, PhoneToolCatalog.SCREENSHOT -> 12_000L
             PhoneToolCatalog.COLLECT -> 120_000L
             PhoneToolCatalog.HANDOFF -> 30_000L
             else -> 30_000L

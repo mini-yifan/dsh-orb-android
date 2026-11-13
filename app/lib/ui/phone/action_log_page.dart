@@ -16,6 +16,7 @@ String phoneToolLabel(String tool) {
   final name = tool.startsWith('mcp__phone__') ? tool.substring('mcp__phone__'.length) : tool;
   return switch (name) {
     'screen' => appL10n.phoneToolScreen,
+    'screenshot' => appL10n.phoneToolScreenshot,
     'collect' => appL10n.phoneToolCollect,
     'tap' => appL10n.phoneToolTap,
     'type' => appL10n.phoneToolType,

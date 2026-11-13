@@ -15,6 +15,7 @@ object PhoneToolCatalog {
     const val NOTIFY = "notify"
     const val CLIPBOARD = "clipboard"
     const val SCREEN = "screen"
+    const val SCREENSHOT = "screenshot"
     const val COLLECT = "collect"
     const val TAP = "tap"
     const val TYPE = "type"
@@ -178,6 +179,16 @@ object PhoneToolCatalog {
             emptyList(),
         ),
         Tool(
+            SCREENSHOT,
+            // l10n:keep agent tool catalog
+            "把当前屏幕拍成一张干净的截图，保存到 下载/DSH-Go 文件夹，并把图片放到系统剪贴板（可直接粘贴）。用在你想要一张截图文件或要把画面贴到别处时；只是想看当前界面、找元素编号用 screen。安全窗口、支付或密码页、含银行卡或身份证号的页面不会截图。background:true 拍后台屏（不打扰模式）。截图不会附带元素编号。",
+            linkedMapOf(
+                // l10n:keep agent tool catalog
+                "background" to bool("拍后台屏（不打扰模式）而不是当前屏幕"),
+            ),
+            emptyList(),
+        ),
+        Tool(
             COLLECT,
             // l10n:keep agent tool catalog
             "只读：自动滚动列表收集全部条目（按文字去重），读长列表只用这一次。",
@@ -273,5 +284,5 @@ object PhoneToolCatalog {
     fun listJson(): List<Map<String, Any?>> = tools.map { it.toJson() }
 
     /** Tools that act on a screen through a [PhoneDriver] (need accessibility or the background display). */
-    val SCREEN_TOOLS = setOf(SCREEN, COLLECT, TAP, TYPE, SCROLL, KEY, TAP_XY, HANDOFF)
+    val SCREEN_TOOLS = setOf(SCREEN, SCREENSHOT, COLLECT, TAP, TYPE, SCROLL, KEY, TAP_XY, HANDOFF)
 }

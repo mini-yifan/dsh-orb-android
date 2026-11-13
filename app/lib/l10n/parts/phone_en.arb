@@ -63,6 +63,7 @@
   "phoneLogCopyAll": "Copy all",
   "phoneBackgroundAllow": "Allow access",
   "phoneToolScreen": "Read screen",
+  "phoneToolScreenshot": "Save screenshot",
   "phoneToolCollect": "Scroll and collect",
   "phoneToolTap": "Tap",
   "phoneToolType": "Type",

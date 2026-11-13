@@ -2,6 +2,16 @@
 
 每个版本先中文、后英文。发版时把对应版本的正文（不含版本标题）作为 Release 正文，见 `docs/release.md`。
 
+## 未发布
+
+### 中文
+
+- 手机操控新增「保存截图」工具：把当前屏幕拍成一张干净、没有元素编号的截图，存到 `下载/DSH-Go/`，同时把图片放进系统剪贴板可直接粘贴；也可以拍后台屏。安全窗口、支付或密码页、含银行卡号或身份证号的页面仍不截图，和读屏一样走同一套读取策略。只经过 JVM 单测和编译检查，未在真机上验证。
+
+### English
+
+- Phone control has a new "save screenshot" tool: it captures a clean screenshot without element numbers, saves it under `Download/DSH-Go/`, and puts the image on the system clipboard ready to paste. It can also capture the background display. Secure windows, payment/password pages, and screens with card or ID numbers are still refused, using the same read policy as screen reading. JVM tests and compile checks only; not verified on a real device.
+
 ## 1.0.15 · 2026-11-10
 
 ### 中文

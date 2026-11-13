@@ -10626,6 +10626,9 @@ class L10nEn extends L10n {
   String get phoneToolScreen => 'Read screen';
 
   @override
+  String get phoneToolScreenshot => 'Save screenshot';
+
+  @override
   String get phoneToolCollect => 'Scroll and collect';
 
   @override

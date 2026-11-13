@@ -10107,6 +10107,9 @@ class L10nZh extends L10n {
   String get phoneToolScreen => '看屏幕';
 
   @override
+  String get phoneToolScreenshot => '保存截图';
+
+  @override
   String get phoneToolCollect => '滚动收集';
 
   @override

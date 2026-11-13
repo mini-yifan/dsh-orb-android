@@ -82,6 +82,7 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
             "phone_opening_background" -> R.string.phone_opening_background
             "phone_reading_background" -> R.string.phone_reading_background
             "phone_reading_screen" -> R.string.phone_reading_screen
+            "phone_capturing_screen" -> R.string.phone_capturing_screen
             "phone_system_handler_unconfirmed" -> R.string.phone_system_handler_unconfirmed
             "phone_system_attempt_stopped" -> R.string.phone_system_attempt_stopped
             "phone_system_review_notice" -> R.string.phone_system_review_notice
@@ -129,6 +130,7 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
             "phone_log_clipboard_read" -> R.string.phone_log_clipboard_read
             "phone_log_background_read" -> R.string.phone_log_background_read
             "phone_log_screen_read" -> R.string.phone_log_screen_read
+            "phone_log_screenshot" -> R.string.phone_log_screenshot
             "phone_log_collect" -> R.string.phone_log_collect
             "phone_log_scroll" -> R.string.phone_log_scroll
             "phone_log_tap_xy" -> R.string.phone_log_tap_xy

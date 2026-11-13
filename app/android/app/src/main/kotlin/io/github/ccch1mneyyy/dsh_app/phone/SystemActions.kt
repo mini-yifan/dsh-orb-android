@@ -352,6 +352,11 @@ class SystemActions(private val app: Context) : SystemApi {
         return SysResult(true, "剪贴板内容：\n$shown")
     }
 
+    override fun saveScreenshot(jpeg: ByteArray): ScreenshotSaved {
+        val stored = ScreenshotShare.save(app, jpeg)
+        return ScreenshotSaved(stored.path, ScreenshotShare.clipboard(app, stored.uri))
+    }
+
     private fun <T> onMain(block: () -> T): T? {
         if (Looper.myLooper() == Looper.getMainLooper()) return runCatching(block).getOrNull()
         var out: T? = null

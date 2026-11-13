@@ -18710,6 +18710,12 @@ abstract class L10n {
   /// **'看屏幕'**
   String get phoneToolScreen;
 
+  /// No description provided for @phoneToolScreenshot.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存截图'**
+  String get phoneToolScreenshot;
+
   /// No description provided for @phoneToolCollect.
   ///
   /// In zh, this message translates to:

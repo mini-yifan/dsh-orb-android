@@ -49,6 +49,12 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
             current()
             return try { remember(driver.observe(detail, image, automaticImage)) } finally { syncCurrentScope() }
         }
+        /** A clean screenshot publishes no id, so it registers no observation; still bound to the
+         * owner and it never refreshes the visual scope (no coordinate permission is implied). */
+        override fun captureImage(): ScreenSnapshot {
+            current()
+            return driver.captureImage()
+        }
         override fun acceptVisualObservation(screenId: String) {
             current()
             if (!tasks.runIfCurrent(owner) {

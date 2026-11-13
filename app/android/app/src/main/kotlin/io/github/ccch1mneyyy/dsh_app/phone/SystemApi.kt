@@ -32,6 +32,9 @@ class SysResult(val ok: Boolean, val message: String, val target: SystemTarget? 
     val appLabel: String? get() = (target as? SystemTarget.Known)?.app?.label
 }
 
+/** What the `screenshot` tool leaves behind. Plain Kotlin: Core and its JVM tests see no URI. */
+data class ScreenshotSaved(val path: String, val clipboard: Boolean)
+
 /** System actions consumed by Core, implemented by Android and faked at the same boundary in tests. */
 interface SystemApi {
     fun apps(): List<AppEntry>
@@ -43,6 +46,9 @@ interface SystemApi {
     fun notify(title: String, text: String): SysResult
     fun clipboardSet(text: String): SysResult
     fun clipboardGet(): SysResult
+    /** Save one clean JPEG to Downloads and put the same image on the clipboard. */
+    fun saveScreenshot(jpeg: ByteArray): ScreenshotSaved =
+        throw UnsupportedOperationException("saveScreenshot is Android-only")
 }
 
 /** PM adapter data. No package-name heuristic can identify every platform/OEM resolver. */

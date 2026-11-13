@@ -153,6 +153,10 @@ interface PhoneDriver {
      * Old drivers and explicit two-argument callers keep their original image behavior. */
     fun observe(detail: Boolean, image: Boolean, automaticImage: Boolean): ScreenSnapshot = observe(detail, image)
 
+    /** A clean, unnumbered screenshot plus its read sources, for the `screenshot` tool.
+     * The core applies [SafetyGate.filterScreen] to the returned snapshot before saving it. */
+    fun captureImage(): ScreenSnapshot = observe(detail = false, image = true, automaticImage = false)
+
     /** Accepts only a driver-recorded candidate after the task's final screen filter, including
      * text-only visual observations. A missing candidate is a no-op; not model-delivery evidence. */
     fun acceptVisualObservation(screenId: String) {}
