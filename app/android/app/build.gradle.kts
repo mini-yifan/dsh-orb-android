@@ -43,7 +43,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.ccch1mneyyy.dsh_app"
+        // A separate id for the sideloaded test build: installs next to the real
+        // app and keeps its own data. `-PtestAppId=true` on the Gradle command.
+        applicationId = if (project.hasProperty("testAppId")) {
+            "io.github.ccch1mneyyy.dsh_app.mesh"
+        } else {
+            "io.github.ccch1mneyyy.dsh_app"
+        }
         // java.nio.file (symlinks while unpacking the rootfs) needs API 26.
         minSdk = 26
         // Target 28 like Termux, so the API 29+ exec restriction on app-private

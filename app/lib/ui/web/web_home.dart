@@ -317,6 +317,9 @@ class _WebEntryHostState extends ConsumerState<WebEntryHost> {
         // The page follows the current conversation (WebHome).
         ref.read(activeHostProvider.notifier).select(host);
         ref.read(currentSessionProvider.notifier).select(sessionId);
+      case MeshEntry():
+        // The app's native shell owns the Mesh window; this page has no Mesh view.
+        return;
     }
   }
 

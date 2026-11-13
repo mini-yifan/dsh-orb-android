@@ -147,12 +147,16 @@ class ShortcutsPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHa
         }
         // Consumed either way: an entry without our token goes nowhere.
         if (intent.getStringExtra(EXTRA_TOKEN) != token) return true
-        if (kind != KIND_NEW && kind != KIND_VOICE && kind != KIND_CHAT) return true
+        if (kind != KIND_NEW && kind != KIND_VOICE && kind != KIND_CHAT && kind != KIND_MESH) return true
         val sessionId = intent.getStringExtra(EXTRA_SESSION)
-        if (kind == KIND_CHAT && sessionId.isNullOrEmpty()) return true
+        if ((kind == KIND_CHAT || kind == KIND_MESH) && sessionId.isNullOrEmpty()) return true
+        if (kind == KIND_MESH && intent.getStringExtra(EXTRA_NODE).isNullOrEmpty()) return true
         val event = mapOf(
             "kind" to kind, "sessionId" to sessionId, "host" to intent.getStringExtra(EXTRA_HOST),
             "text" to intent.getStringExtra(EXTRA_TEXT),
+            "nodeId" to intent.getStringExtra(EXTRA_NODE),
+            "title" to intent.getStringExtra(EXTRA_TITLE),
+            "nodeName" to intent.getStringExtra(EXTRA_NODE_NAME),
         )
         if (ready) methods.invokeMethod("entry", event) else pending += event
         return true
@@ -166,6 +170,9 @@ class ShortcutsPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHa
         const val EXTRA_HOST = "io.github.ccch1mneyyy.dsh_app.entry.HOST"
         const val EXTRA_TEXT = "io.github.ccch1mneyyy.dsh_app.entry.TEXT"
         const val EXTRA_PATH = "io.github.ccch1mneyyy.dsh_app.entry.PATH"
+        const val EXTRA_NODE = "io.github.ccch1mneyyy.dsh_app.entry.NODE"
+        const val EXTRA_TITLE = "io.github.ccch1mneyyy.dsh_app.entry.TITLE"
+        const val EXTRA_NODE_NAME = "io.github.ccch1mneyyy.dsh_app.entry.NODE_NAME"
         const val EXTRA_TOKEN = "io.github.ccch1mneyyy.dsh_app.entry.TOKEN"
         private const val EXTRA_TAKEN = "io.github.ccch1mneyyy.dsh_app.entry.TAKEN"
 
@@ -173,6 +180,7 @@ class ShortcutsPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHa
         const val KIND_VOICE = "voice"
         const val KIND_CHAT = "chat"
         const val KIND_SCREENSHOT = "screenshot"
+        const val KIND_MESH = "mesh"
 
         const val MAX_RECENT = 3
         const val RECENT_PREFIX = "chat:"

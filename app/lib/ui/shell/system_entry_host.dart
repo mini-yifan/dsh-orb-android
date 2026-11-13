@@ -28,6 +28,7 @@ import '../../links/app_links.dart';
 import '../../links/launcher_entries.dart';
 import '../../links/share_intake.dart';
 import '../../state/attachments.dart';
+import '../mesh/mesh_session_page.dart';
 import '../../state/compose_inbox.dart';
 import '../../state/draft_store.dart';
 import '../../state/hosts_state.dart';
@@ -127,6 +128,20 @@ class _SystemEntryHostState extends ConsumerState<SystemEntryHost> {
         // one from switching away on a cold start (as notification taps do).
         ref.read(activeHostProvider.notifier).select(host);
         ref.read(currentSessionProvider.notifier).select(sessionId);
+      case MeshEntry(:final nodeId, :final sessionId, :final title, :final nodeName):
+        // A device_agent task bookmark: the app already has a Mesh session
+        // page for it; push it over the chat the shell just restored.
+        if (!await _showChat() || !mounted) return;
+        await Navigator.of(context, rootNavigator: true).push(
+          MeshSessionPage.route(
+            nodeId: nodeId,
+            sessionId: sessionId,
+            title: title.isEmpty ? appL10n.meshTitle : title,
+            nodeName: nodeName.isEmpty ? nodeId : nodeName,
+            workspaceName: appL10n.meshTitle,
+            controllable: true,
+          ),
+        );
     }
   }
 

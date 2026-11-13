@@ -20,7 +20,9 @@ import android.util.Log
  *     [--es detail '回复的头两行' | --es askText '运行：git push' --es askKind approval --ez approvable true
  *      --es choices 'A|B|C' --es eventId e1] [--ez canStop true --es hosts '本机|电脑 · SSH']
  * … --es cmd ask [--ez fresh true]   (问一句's bar, as the menu opens it)
- * adb shell am broadcast -a io.github.ccch1mneyyy.dsh_app.PET_PROBE --es cmd enable --ez on true
+ * adb shell am broadcast -a io.github.ccch1mneyyy.dsh_app.PET_PROBE --es cmd strip \
+ *     [--ez show true] [--es variant tongue|edge|tuck12|tuck28] [--ez animate true] [--ez cycle true] [--es line 正在点按]
+ * … --es cmd enable --ez on true
  * … --es cmd always --ez on true | --es cmd unsnooze | --es cmd permission | --es cmd state
  * … --es cmd notify [--ez attention true --es key k2]   (a chat notification, for ResultSilence)
  * ```
@@ -71,6 +73,16 @@ internal object PetOverlayProbe {
                         ),
                     )
                     "ask" -> PetOverlay.probeAsk(intent.getBooleanExtra("fresh", false))
+                    "strip" -> PetOverlay.probeStrip(
+                        show = intent.getBooleanExtra("show", true),
+                        variant = intent.getStringExtra("variant"),
+                        animate = intent.getBooleanExtra("animate", true),
+                        cycle = intent.getBooleanExtra("cycle", false),
+                        line = intent.getStringExtra("line"),
+                    )
+                    "say" -> PetOverlay.probeSay(intent.getStringExtra("text") ?: "hello")
+                    "stop" -> PetOverlay.probeStop()
+                    "bookmarks" -> PetOverlay.probeBookmarks(intent.getBooleanExtra("show", true))
                     "enable" -> PetOverlay.setEnabled(intent.getBooleanExtra("on", true))
                     "always" -> PetOverlay.setAlwaysShow(intent.getBooleanExtra("on", true))
                     "unsnooze" -> PetOverlay.unsnooze()

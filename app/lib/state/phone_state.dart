@@ -7,7 +7,6 @@ import '../phone/phone_channel.dart';
 import '../l10n/l10n.dart';
 import '../runtime/runtime_bridge.dart';
 import '../runtime/runtime_state.dart';
-import 'connection_state.dart';
 import 'engine_control.dart';
 import 'hosts_state.dart';
 
@@ -493,69 +492,9 @@ final phoneConfirmPendingProvider = Provider<void>((ref) {
   }());
 });
 
-/// Legacy-only launches keep the original cancel-all watcher. Modern stops are
-/// native and session-scoped; without an atomic host run-cancel protocol they
-/// refuse further phone calls but do not claim to stop host reasoning. Mixed
-/// launches never borrow legacy cancel-all to cancel another modern session.
-final phoneStopWatcherProvider = Provider<void>((ref) {
-  final channel = ref.watch(phoneChannelProvider);
-  StreamSubscription<PhoneStatus>? sub;
-  var disposed = false;
-  int? statusRevision;
-  bool acceptStatus(PhoneStatus status) {
-    if (!status.ready) return false;
-    final revision = status.statusRevision;
-    if (status.statusRevisionPresent && revision == null) return false;
-    final previous = statusRevision;
-    if (previous != null && (revision == null || revision <= previous)) return false;
-    if (revision != null) statusRevision = revision;
-    return true;
-  }
-  ref.onDispose(() {
-    disposed = true;
-    unawaited(sub?.cancel());
-  });
-  unawaited(() async {
-    final status = await channel.status();
-    // No native side (tests, an older build): nothing to watch.
-    if (disposed || !acceptStatus(status)) return;
-    var stopped = status.task.stopped;
-    var launch = status.callerCapability?.launch;
-    var modernSeen = status.callerCapability?.modernSeen == true || status.tasks.any((task) => task.sessionId != null);
-    var versioned = status.taskProtocol == 1 || launch != null;
-    sub = channel.statusChanges.listen((s) {
-      if (disposed || !acceptStatus(s)) return;
-      final capability = s.callerCapability;
-      final previousLaunch = launch;
-      if (capability != null && previousLaunch != null && capability.launch < previousLaunch) return;
-      final modernTasks = s.tasks.any((task) => task.sessionId != null);
-      if (capability != null && (previousLaunch == null || capability.launch > previousLaunch)) {
-        launch = capability.launch;
-        modernSeen = (previousLaunch == null && modernSeen) || capability.modernSeen || modernTasks;
-        versioned = true;
-        stopped = s.task.stopped;
-        return; // A new launch is a baseline, not a stop edge.
-      }
-      modernSeen = modernSeen || capability?.modernSeen == true || modernTasks;
-      versioned = versioned || s.taskProtocol == 1 || capability != null;
-      // Session-aware native owns targeted stopping. The host API has no atomic
-      // expected-run cancellation, so never cancel a later turn or every conversation.
-      if (!modernSeen && (capability != null || !versioned) && s.task.stopped && !stopped) unawaited(_cancelLocalTurns(ref));
-      stopped = s.task.stopped;
-    }, onError: (_) {});
-  }());
-});
-
-Future<void> _cancelLocalTurns(Ref ref) async {
-  final client = ref.read(localConnectionProvider).value?.client;
-  if (client == null) return;
-  try {
-    for (final s in await client.listSessions()) {
-      if (s.running) {
-        await client.cancel(s.sessionId).catchError((Object _) {});
-      }
-    }
-  } catch (_) {
-    // The engine may be restarting; nothing left to stop then.
-  }
-}
+/// The phone control's stop is native and session-scoped. The original
+/// cancel-all watcher is intentionally gone: this app runs several local
+/// conversations (the Orb, the app), and a phone stop in one must not cancel
+/// another's running turn. A stopped task refuses its own tools; the agent
+/// reads that result and concludes, and the next send resumes the task.
+final phoneStopWatcherProvider = Provider<void>((ref) {});

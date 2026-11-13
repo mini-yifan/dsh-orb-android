@@ -138,7 +138,9 @@ internal class PetView(context: Context, private val listener: Listener) : View(
     // ---- touch ---------------------------------------------------------------------------------
 
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
-    private val longPressMs = ViewConfiguration.getLongPressTimeout().toLong()
+
+    /** Held this long without moving: a long press (the orb's voice, or the old wheel). */
+    var longPressMs: Long = ViewConfiguration.getLongPressTimeout().toLong()
     private var downX = 0f
     private var downY = 0f
     private var dragging = false

@@ -12,6 +12,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.text.TextUtils
 import android.text.TextWatcher
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -109,6 +110,9 @@ internal class AskBarView(context: Context, private val listener: Listener) : Li
         fun onSend(text: String)
         fun onSwitch()
 
+        /** The send key showing ■: stop the session the strip follows. */
+        fun onStop()
+
         /** Pressed ([down]) and let go, or slid off ([cancelled]). */
         fun onMic(down: Boolean, cancelled: Boolean)
         fun onDraft(text: String)
@@ -167,7 +171,10 @@ internal class AskBarView(context: Context, private val listener: Listener) : Li
     }
     private val mic = key(R.drawable.ic_pet_mic, AppStrings.get(context, R.string.pet_ask_hold_to_talk))
     private val sendKey = key(R.drawable.ic_pet_send, AppStrings.get(context, R.string.pet_ask_send)).apply {
-        setOnClickListener { send() }
+        setOnClickListener {
+            Log.i("DshPet", "ask key: stop=${stoppable && empty()} text=${input.text?.length ?: 0}")
+            if (stoppable && empty()) listener.onStop() else send()
+        }
     }
     private val status = TextView(context).apply {
         textSize = 12f
@@ -177,6 +184,27 @@ internal class AskBarView(context: Context, private val listener: Listener) : Li
     private var blocked = false
     private var busy = false
     private var listening = false
+
+    /** The send key becomes ■ while the strip's session runs and the input is empty. */
+    private var stoppable = false
+
+    private fun empty() = input.text?.toString()?.trim().isNullOrEmpty()
+
+    /** The strip's session is running: an empty send key stops it instead. */
+    fun setStopMode(on: Boolean) {
+        if (stoppable == on) return
+        stoppable = on
+        refreshKeys()
+    }
+
+    /** The orb strip's rounded capsule instead of the old beside-the-pet card. */
+    fun setStripLook(on: Boolean) {
+        background = GradientDrawable().apply {
+            cornerRadius = context.dp(if (on) 24f else 18f).toFloat()
+            setColor(palette.fill)
+            setStroke(context.dp(1f).coerceAtLeast(1), palette.stroke)
+        }
+    }
 
     init {
         orientation = VERTICAL
@@ -276,11 +304,16 @@ internal class AskBarView(context: Context, private val listener: Listener) : Li
     }
 
     private fun refreshKeys() {
+        val stop = stoppable && empty() && !busy
         val can = AskBarView.canSend(input.text?.toString(), blocked, busy, listening)
-        sendKey.isEnabled = can
-        sendKey.alpha = if (can) 1f else 0.4f
-        sendKey.background = circle(if (can) palette.accent else palette.pressed)
-        sendKey.imageTintList = ColorStateList.valueOf(if (can) palette.onAccent else palette.muted)
+        sendKey.setImageResource(if (stop) R.drawable.ic_pet_stop else R.drawable.ic_pet_send)
+        sendKey.contentDescription = AppStrings.get(context, if (stop) R.string.pet_stop else R.string.pet_ask_send)
+        sendKey.isEnabled = stop || can
+        sendKey.alpha = if (stop || can) 1f else 0.4f
+        sendKey.background = circle(if (stop) palette.tonal else if (can) palette.accent else palette.pressed)
+        sendKey.imageTintList = ColorStateList.valueOf(
+            if (stop) palette.onTonal else if (can) palette.onAccent else palette.muted,
+        )
         mic.background = circle(if (listening) palette.accent else palette.pressed)
         mic.imageTintList = ColorStateList.valueOf(if (listening) palette.onAccent else palette.ink)
         mic.isEnabled = !busy
@@ -313,6 +346,7 @@ internal class AskBarView(context: Context, private val listener: Listener) : Li
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+            Log.i("DshPet", "ask outside")
             listener.onClose()
             return true
         }

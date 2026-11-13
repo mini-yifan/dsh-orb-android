@@ -111,6 +111,18 @@ internal object PetOverlay {
     private const val MIN_WAV_BYTES = 44 + 9_600
     /** A recording held this long without the system silencing it is a real one. */
     private const val SILENCE_CHECK_MS = 400L
+    /** Orb hold-to-talk: held this long before it counts, slid up this far to cancel, ignored below this. */
+    private const val VOICE_LONG_PRESS_MS = 350L
+    private const val VOICE_CANCEL_DP = 80f
+    private const val VOICE_MIN_MS = 300L
+    /** How long the "sent" strip stays before it retracts. */
+    private const val SENT_STRIP_MS = 3_000L
+    /** The E1/E5 probe: how long each seam variant stays in the cycle. */
+    private const val PROBE_STEP_MS = 2_000L
+    /** A BadToken from the accessibility overlay keeps the pet on the app overlay this long. */
+    private const val A11Y_BAD_TOKEN_MS = 30 * 60_000L
+    /** The host field for `EntryActivity.openChat` on this phone. */
+    private const val LOCAL_HOST = "{\"kind\":\"local\",\"id\":\"local\"}"
 
     private lateinit var app: Context
     private lateinit var prefs: SharedPreferences
@@ -135,6 +147,7 @@ internal object PetOverlay {
     private var failedAt = 0L
     private var lastCanDraw: Boolean? = null
     private val accessibilityRetry = AccessibilityOverlayRetry()
+    private var a11yBadTokenAt = 0L
 
     // ---- pack ----
     private var loaded: PetSprites.Loaded? = null
@@ -387,6 +400,7 @@ internal object PetOverlay {
                 stopLoop()
                 dismissMenu()
                 removeAsk()
+                cancelVoiceAndStrip()
             }
             Visibility.SHOWN -> {
                 val before = lastAdd
@@ -416,6 +430,9 @@ internal object PetOverlay {
             accessibilityRetry.remaining(PhoneA11yService.instance, t),
         ).minOrNull()
         if (wake != null) main.postDelayed(evaluateRunnable, wake.coerceAtLeast(50))
+        // The status strip follows the pet's visibility (app foreground, snooze, rotation).
+        syncOrbStrip()
+        syncBookmarks()
         publishStatus()
     }
 
@@ -431,11 +448,18 @@ internal object PetOverlay {
 
     private fun a11yConnected() = PhoneA11yService.instance != null
 
-    private fun overlayHost(): OverlayHost = OverlayAccess.host(
-        a11yConnected(), lastAdd,
-        a11yFailed = accessibilityRetry.remaining(PhoneA11yService.instance, now()) != null,
-        canDraw = canDraw(),
-    )
+    private fun overlayHost(): OverlayHost {
+        val service = PhoneA11yService.instance
+        // A stale accessibility window token (seen right after an APK update, and while
+        // two accessibility services flap) otherwise re-fails every 60 s and tears the
+        // pet down each time. Stay on the app overlay for a while after one.
+        val badToken = a11yBadTokenAt != 0L && now() - a11yBadTokenAt < A11Y_BAD_TOKEN_MS
+        return OverlayAccess.host(
+            a11yConnected(), lastAdd,
+            a11yFailed = badToken || accessibilityRetry.remaining(service, now()) != null,
+            canDraw = canDraw(),
+        )
+    }
 
     private fun canDraw(): Boolean = try { Settings.canDrawOverlays(app) } catch (_: Exception) { false }
 
@@ -702,7 +726,10 @@ internal object PetOverlay {
             wm = w
             val ticket = windows.claim(OverlayWindowOwner.Role.PET) ?: return false
             petTicket = ticket
-            val view = PetView(ctx, petListener(ticket)).apply { setSprites(loaded) }
+            val view = PetView(ctx, petListener(ticket)).apply {
+                setSprites(loaded)
+                longPressMs = VOICE_LONG_PRESS_MS
+            }
             if (view.pixelWidth <= 0) {
                 removeWindows()
                 return false
@@ -732,7 +759,13 @@ internal object PetOverlay {
                 failedAt = now()
             } else if (service != null) {
                 accessibilityRetry.failed(service, now())
+                a11yBadTokenAt = now()
                 service.invalidateOverlayWindowContext()
+                // With the failure cooldown in place the next evaluate picks the
+                // application overlay (when allowed) instead of leaving no pet
+                // for a whole minute. A stale accessibility window token after
+                // an app update is exactly this case.
+                main.post(evaluateRunnable)
             }
             host = OverlayHost.NONE
             false
@@ -741,6 +774,7 @@ internal object PetOverlay {
 
     private fun removeWindows() {
         // Invalidate input/async callbacks before cancel() or platform removal can call us back.
+        discardOrbLayers()
         windows.retire()
         stopLoop()
         openPendingIntent?.cancel()
@@ -911,6 +945,7 @@ internal object PetOverlay {
             dragging = true
             setDimmed(false)
             machine.onTouch(now())
+            cancelVoiceAndStrip()
             dismissMenu()
             removeBubble()
             showTarget()
@@ -980,32 +1015,47 @@ internal object PetOverlay {
             if (dimmed) evaluate()
             dismissMenu()
             react(if (leftHalf) "tapLeft" else "tapRight", loop = false)
-            val push = machine.last
-            open(push?.sessionId, push?.host, null)
+            val run = orbRun
+            val busy = run?.running == true || run?.state == "waiting-approval" || run?.state == "waiting-question"
+            if (busy) {
+                // A run owns the strip; typing into it is the app's composer. The strip's ■
+                // stays one tap away outside.
+                open(run?.sessionId, run?.host, null)
+            } else {
+                // The ball's primary gesture: type into the local Orb conversation.
+                showAsk(fresh = false, orb = true)
+            }
         }
 
         override fun onLongPress(rawX: Float?, rawY: Float?) {
             if (!alive(ticket)) return
             machine.onTouch(now())
             if (dimmed) evaluate()
-            showMenu(rawX, rawY)
+            // TalkBack's long-click has no pointer: the old bar is the accessible text path.
+            if (rawX == null || rawY == null) {
+                showAsk(fresh = false)
+                return
+            }
+            startVoice(rawX, rawY)
         }
 
         override fun onMenuMove(rawX: Float, rawY: Float) {
-            if (alive(ticket)) menuView?.movePointer(rawX, rawY)
+            if (alive(ticket)) moveVoice(rawY)
         }
 
         override fun onMenuEnd(rawX: Float, rawY: Float, cancelled: Boolean) {
             if (!alive(ticket)) return
-            menuView?.endPointer(rawX, rawY, cancelled)
-            menuView?.let { windowTickets[it] }?.takeIf(::alive)?.let(::scheduleMenuTimeout)
+            endVoice(cancelled)
         }
 
         override fun onShownChanged(shown: Boolean) {
             if (!alive(ticket)) return
             if (shown == systemShown) return
             systemShown = shown
-            if (!shown) dismissMenu()
+            if (!shown) {
+                dismissMenu()
+                cancelVoiceAndStrip()
+            }
             // Hidden by the system (another app's setHideOverlayWindows): wait, don't re-add.
             main.post(evaluateRunnable)
         }
@@ -1500,10 +1550,11 @@ internal object PetOverlay {
     private var askRequest = 0L
 
     /**
-     * Opens the bar beside the docked pet ([fresh]: on 「新对话」), focused, the keyboard up; asks
-     * Dart where a send would go meanwhile.
+     * Opens the input bar. [orb] is the floating ball's own strip: it grows out of the docked pet,
+     * targets this phone's Orb conversation, and its send key becomes ■ while the strip's session
+     * runs. Without [orb] it is the old beside-the-pet bar for the active host (TalkBack / wheel).
      */
-    private fun showAsk(fresh: Boolean) {
+    private fun showAsk(fresh: Boolean, orb: Boolean = false) {
         if (capture.inFlight || !interactive()) return
         removeAsk()
         val ctx = hostContext ?: return
@@ -1511,21 +1562,43 @@ internal object PetOverlay {
         val f = loaded?.frames ?: return
         val ticket = windows.claim(OverlayWindowOwner.Role.ASK) ?: return
         askFresh = fresh
+        askOrb = orb
         askTarget = null
         val view = AskBarView(ctx, askListener(ticket))
         view.input.setText(askDraft)
         view.setState(problem = true, sending = askDraftState.sending)
         view.input.setSelection(view.input.length())
-        view.setTarget(null, switchShown = false, on = fresh)
+        view.setTarget(
+            if (orb) AppStrings.get(app, R.string.pet_orb_starting) else null,
+            switchShown = false,
+            on = fresh,
+        )
+        view.setStripLook(orb)
+        view.setStatus(orbRun?.let { orbLine(it) }?.takeIf { it.isNotEmpty() }, error = orbRun?.state == "error")
+        view.setStopMode(orb && orbRun?.canStop == true)
         val area = safeArea()
         val gap = ctx.dp(8f)
         val margin = edge(ctx)
         val at = EdgeSnap.position(dock, pv.reach, area, margin)
         val body = f.body.at(at)
         val pet = ScreenRect(at.x + pv.reach.left, body.top, at.x + pv.reach.right, body.bottom)
-        val w = AskPlace.width(pet, dock.side, area, gap, margin, ctx.dp(ASK_MIN_DP), ctx.dp(ASK_MAX_DP))
+        val orbPlace = if (orb) orbStripPlacement() else null
+        val w = if (orbPlace != null) {
+            minOf(orbPlace.strip.width, ctx.dp(ASK_MAX_DP))
+        } else {
+            AskPlace.width(pet, dock.side, area, gap, margin, ctx.dp(ASK_MIN_DP), ctx.dp(ASK_MAX_DP))
+        }
         val (_, h) = view.measureFor(w)
-        val pos = AskPlace.beside(pet, dock.side, w, h, area, gap, margin)
+        val pos = if (orbPlace != null) {
+            val x = if (dock.side == Side.RIGHT) orbPlace.strip.right - w else orbPlace.strip.left
+            val y = (body.centerY - h / 2).coerceIn(
+                area.top + margin,
+                maxOf(area.top + margin, area.screenH - area.bottom - margin - h),
+            )
+            WindowPos(x, y)
+        } else {
+            AskPlace.beside(pet, dock.side, w, h, area, gap, margin)
+        }
         // The one window that takes focus, and only while it is open: the keyboard needs it.
         val params = baseParams(w, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH).apply {
             flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
@@ -1543,14 +1616,20 @@ internal object PetOverlay {
         askView = view
         askParams = params
         askY = pos.y
+        Log.i(TAG, "ask add orb=$orb w=$w h=$h x=${pos.x} y=${pos.y}")
         dismissMenu()
         removeBubble()
+        if (orbPlace != null) {
+            hideOrbStrip(animate = false)
+            ensureOrbStrip()?.showSeam(orbPlace)
+        }
         if (animationsOn()) {
             view.alpha = 0f
             view.animate().alpha(1f).setDuration(150).setInterpolator(easing).start()
         }
         view.input.requestFocus()
         view.post { if (askView === view) view.context.getSystemService(InputMethodManager::class.java)?.showSoftInput(view.input, 0) }
+        syncBookmarks()
         evaluate()
         requestAskTarget(view)
     }
@@ -1558,7 +1637,7 @@ internal object PetOverlay {
     /** Asks Dart where a send would go; 「新对话」 re-asks so the capture flag follows it too. */
     private fun requestAskTarget(view: AskBarView) {
         val request = ++askRequest
-        callDart("askTarget", mapOf("fresh" to askFresh)) { raw ->
+        callDart("askTarget", mapOf("fresh" to askFresh, "orb" to askOrb)) { raw ->
             if (request != askRequest || askView !== view) return@callDart
             // No answer: nothing known to stand in the way; a send hands the text to the app.
             askTarget = AskTarget.fromMap(raw) ?: AskTarget(null, null, null, AskTarget.VOICE_OFF)
@@ -1570,12 +1649,17 @@ internal object PetOverlay {
         val t = askTarget ?: return
         val fresh = askFresh || t.current == null
         view.setTarget(t.chat(fresh)?.line ?: AppStrings.get(app, R.string.pet_new_chat), t.canSwitch, fresh)
-        view.setStatus(t.problem, error = t.problem != null)
+        // The orb input bar keeps the live run line under the input instead of hiding it.
+        val run = if (askOrb) orbRun else null
+        val status = t.problem ?: run?.let { orbLine(it) }
+        view.setStatus(status?.takeIf { it.isNotEmpty() }, error = t.problem != null || run?.state == "error")
         view.setState(problem = t.problem != null)
+        view.setStopMode(askOrb && run?.canStop == true)
     }
 
     private fun askListener(ticket: OverlayWindowOwner.Ticket) = object : AskBarView.Listener {
         override fun onSend(text: String) {
+            Log.i(TAG, "ask send tap text=${text.length}")
             if (alive(ticket)) sendAsk(text)
         }
 
@@ -1584,6 +1668,10 @@ internal object PetOverlay {
             askFresh = !askFresh
             askView?.let(::showTarget)
             askView?.let(::requestAskTarget)
+        }
+
+        override fun onStop() {
+            if (alive(ticket)) onOrbStop()
         }
 
         override fun onMic(down: Boolean, cancelled: Boolean) {
@@ -1600,11 +1688,13 @@ internal object PetOverlay {
 
         override fun onClose() {
             if (!alive(ticket)) return
+            Log.i(TAG, "ask close")
             removeAsk()
             evaluate()
         }
 
         override fun onIme(overlap: Int, visible: Boolean) {
+            Log.i(TAG, "ask ime overlap=$overlap visible=$visible")
             if (alive(ticket)) liftAsk(overlap, visible)
         }
     }
@@ -1614,6 +1704,8 @@ internal object PetOverlay {
         val v = askView ?: return
         val p = askParams ?: return
         val ctx = hostContext ?: return
+        // The bar leaves the pet while the keyboard is up; the seam would hang in the air.
+        if (overlap > 0) orbStrip?.hideSeam() else if (askOrb) orbStripPlacement()?.let { orbStrip?.showSeam(it) }
         // Use the laid-out position, not params.y (which may already contain a pending move).
         val location = IntArray(2).also(v::getLocationOnScreen)
         val y = when {
@@ -1624,6 +1716,7 @@ internal object PetOverlay {
         if (y == p.y) return
         p.y = y
         update(v, p)
+        syncBookmarks()
     }
 
     /**
@@ -1664,6 +1757,8 @@ internal object PetOverlay {
         view.context.getSystemService(InputMethodManager::class.java)
             ?.hideSoftInputFromWindow(view.windowToken, 0)
         hideTarget()
+        orbStrip?.hideSeam()
+        hideBookmarks()
         petView?.visibility = View.INVISIBLE
         publishStatus()
         main.postDelayed({
@@ -1671,6 +1766,7 @@ internal object PetOverlay {
                 val accepted = capture.finish(request)
                 if (askView === view) view.visibility = View.VISIBLE
                 petView?.visibility = View.VISIBLE
+                if (askOrb) orbStripPlacement()?.let { orbStrip?.showSeam(it) }
                 evaluate()
                 reply(if (accepted) result.path else null)
             }
@@ -1700,15 +1796,27 @@ internal object PetOverlay {
             val completion = askDraftState.finish(send, accepted = r?.get("sent") == true) ?: return@callDart
             val current = request == askRequest && askView === view
             askView?.setState(sending = false)
+            val orbSent = r?.get("orb") == true
+            if (orbSent) {
+                voiceSession = r["sessionId"] as? String
+                voiceHost = r["host"] as? String
+            }
             when {
                 r?.get("sent") == true -> {
-                    Log.i(TAG, "ask sent (${if (chat?.sessionId == null) "new chat" else "same chat"})")
+                    Log.i(TAG, "ask sent (${if (chat?.sessionId == null) "new chat" else "same chat"}) orb=$orbSent")
                     if (completion.cleared) {
                         // A reopened bar shares this draft. Clear its copy too so closing it
                         // cannot resurrect text the host already accepted.
                         askView?.input?.setText("")
                         prefs.edit().remove("ask_draft").apply()
                         if (current) removeAsk()
+                    }
+                    if (orbSent) {
+                        if (askView != null && askOrb) {
+                            askView?.setStatus(AppStrings.get(app, R.string.pet_voice_sent))
+                        } else {
+                            showSentStrip(screenshot != null)
+                        }
                     }
                 }
                 r != null -> if (current) {
@@ -1735,6 +1843,882 @@ internal object PetOverlay {
         askView = null
         askParams = null
         askTarget = null
+        askOrb = false
+        orbStrip?.hideSeam()
+        Log.i(TAG, "ask remove")
+        if (initialized) syncOrbStrip()
+        syncBookmarks()
+    }
+
+    // ---- 悬浮球：长按语音 + 长条（v0.1 P0） ------------------------------------------------------
+
+    private var orbVoice: OrbVoiceController? = null
+    private var voiceCapsule: OrbVoiceCapsule? = null
+    private var voiceTarget: AskTarget? = null
+    private var voiceWav: ByteArray? = null
+    private var voiceStartY = 0f
+    private var voiceCancel = false
+    private var voiceTimer: Runnable? = null
+    private var voiceProblemGen = 0
+    private var voiceOfferRequest = 0L
+    private var voiceSession: String? = null
+    private var voiceHost: String? = null
+    private var orbStrip: OrbStrip? = null
+    private var stripHide: Runnable? = null
+    private var orbBookmarks: OrbBookmarks? = null
+    private var bookmarkItems: List<OrbBookmark> = emptyList()
+    private var bookmarkProbeLoop: Runnable? = null
+    private var probeVariant = SeamVariant.TONGUE
+    private var probeCycle: Runnable? = null
+
+    /** The local Orb conversation's live status, pushed by Dart (`pushOrb`). */
+    private data class OrbRun(
+        val sessionId: String,
+        val host: String,
+        val running: Boolean,
+        val canStop: Boolean,
+        val state: String,
+        val tool: String?,
+        val text: String?,
+    )
+
+    private var orbRun: OrbRun? = null
+    private var orbWasRunning = false
+    private var orbDoneTimer: Runnable? = null
+    private var orbStoppedAt = 0L
+    private var orbStoppedSession: String? = null
+    /** The open input bar is the orb's strip (not the old beside-the-pet bar). */
+    private var askOrb = false
+
+    /** Long-press on the ball: record now, ask Dart where a send would go in parallel. */
+    private fun startVoice(rawX: Float, rawY: Float) {
+        if (capture.inFlight || !interactive() || orbVoice != null) return
+        if (app.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            showVoiceHint(AppStrings.get(app, R.string.pet_ask_mic_permission))
+            return
+        }
+        val pv = petView ?: return
+        val pp = petParams ?: return
+        val frames = loaded?.frames ?: return
+        val capsule = ensureVoiceCapsule() ?: return
+        dismissMenu()
+        removeBubble()
+        removeAsk()
+        hideOrbStrip()
+        machine.onTouch(now())
+        voiceCancel = false
+        voiceStartY = rawY
+        voiceWav = null
+        voiceTarget = null
+        voiceSession = null
+        voiceHost = null
+        voiceProblemGen++
+        val controller = OrbVoiceController(app)
+        val listener = object : OrbVoiceController.Listener {
+            override fun onLevel(level: Double) {
+                capsule.setLevel(level)
+            }
+
+            override fun onLimit() {
+                endVoice(cancelled = false)
+            }
+
+            override fun onError() {
+                voiceProblem(AppStrings.get(app, R.string.pet_ask_not_heard))
+            }
+
+            override fun onSilenced() {
+                voiceProblem(AppStrings.get(app, R.string.pet_voice_silenced))
+            }
+        }
+        if (!controller.start(listener)) {
+            showVoiceHint(AppStrings.get(app, R.string.pet_ask_mic_failed))
+            return
+        }
+        orbVoice = controller
+        capsule.show(frames.body.at(restPos(pv, pp)), safeArea(), animationsOn())
+        capsule.setElapsed(0)
+        capsule.setHint(AppStrings.get(app, R.string.pet_voice_hint))
+        scheduleVoiceTimer()
+        val request = ++voiceOfferRequest
+        callDart("askTarget", mapOf("fresh" to false, "orb" to true)) { raw ->
+            if (request != voiceOfferRequest) return@callDart
+            val target = AskTarget.fromMap(raw)
+            if (target == null) {
+                voiceProblem(AppStrings.get(app, R.string.pet_ask_failed))
+                return@callDart
+            }
+            if (target.problem != null) {
+                voiceProblem(target.problem)
+                return@callDart
+            }
+            if (target.voice != AskTarget.VOICE_READY) {
+                voiceProblem(
+                    AppStrings.get(
+                        app,
+                        if (target.voice == AskTarget.VOICE_MISSING) R.string.pet_ask_voice_missing else R.string.pet_ask_voice_off,
+                    ),
+                )
+                return@callDart
+            }
+            voiceTarget = target
+            // The finger may have been released before Dart answered: carry the held WAV on.
+            voiceWav?.let {
+                voiceWav = null
+                transcribeVoice(it, target)
+            }
+        }
+        Log.i(TAG, "orb voice: hold start y=$rawY dock=${dock.side}")
+    }
+
+    private fun moveVoice(rawY: Float) {
+        val controller = orbVoice ?: return
+        val threshold = VOICE_CANCEL_DP * app.resources.displayMetrics.density
+        val cancel = voiceStartY - rawY >= threshold
+        if (cancel == voiceCancel) return
+        voiceCancel = cancel
+        voiceCapsule?.setHint(
+            AppStrings.get(app, if (cancel) R.string.pet_voice_cancel else R.string.pet_voice_hint),
+            danger = cancel,
+        )
+        Log.i(TAG, "orb voice: slide dy=${(voiceStartY - rawY).toInt()} cancel=$cancel elapsed=${controller.elapsedMs}")
+    }
+
+    private fun endVoice(cancelled: Boolean) {
+        val controller = orbVoice ?: return
+        orbVoice = null
+        stopVoiceTimer()
+        val elapsed = controller.elapsedMs
+        val cancel = cancelled || voiceCancel
+        Log.i(TAG, "orb voice: release elapsed=${elapsed}ms cancel=$cancel")
+        if (cancel) {
+            controller.cancel()
+            voiceCapsule?.hide()
+            resetVoice()
+            return
+        }
+        if (elapsed < VOICE_MIN_MS) {
+            controller.cancel()
+            voiceProblem(AppStrings.get(app, R.string.pet_voice_too_short))
+            return
+        }
+        voiceCapsule?.setHint(AppStrings.get(app, R.string.pet_ask_transcribing))
+        controller.finish { wav -> onVoiceWav(wav) }
+    }
+
+    private fun onVoiceWav(wav: ByteArray?) {
+        if (wav == null || wav.size < OrbVoiceController.MIN_WAV_BYTES) {
+            voiceProblem(AppStrings.get(app, R.string.pet_ask_not_heard))
+            return
+        }
+        val target = voiceTarget
+        if (target == null) {
+            voiceWav = wav
+            Log.i(TAG, "orb voice: wav held (${wav.size}B) until target")
+            return
+        }
+        transcribeVoice(wav, target)
+    }
+
+    private fun transcribeVoice(wav: ByteArray, target: AskTarget) {
+        val started = System.currentTimeMillis()
+        callDart("transcribe", mapOf("wav" to wav)) { raw ->
+            val r = raw as? Map<*, *>
+            val text = (r?.get("text") as? String)?.trim()
+            Log.i(TAG, "orb voice: asr ${System.currentTimeMillis() - started}ms text=${text?.length ?: 0}")
+            if (text.isNullOrEmpty()) {
+                voiceProblem((r?.get("problem") as? String) ?: AppStrings.get(app, R.string.pet_ask_not_heard))
+                return@callDart
+            }
+            sendVoiceText(text, target)
+        }
+    }
+
+    private fun sendVoiceText(text: String, target: AskTarget) {
+        val fresh = target.current == null
+        val chat = target.chat(fresh)
+        val deliver: (String?) -> Unit = { path -> deliverVoice(text, target, fresh, chat, path) }
+        if (target.shot) {
+            voiceCapsule?.setHint(AppStrings.get(app, R.string.pet_ask_capturing))
+            captureOrbShot(deliver)
+        } else {
+            voiceCapsule?.setHint(AppStrings.get(app, R.string.pet_ask_sending))
+            deliver(null)
+        }
+    }
+
+    /** Hides the pet and the orb layers, captures what is behind them, then restores. */
+    private fun captureOrbShot(reply: (String?) -> Unit) {
+        val request = capture.begin()
+        if (request == null) {
+            reply(null)
+            return
+        }
+        voiceCapsule?.hide()
+        hideOrbStrip(false)
+        hideBookmarks()
+        dismissMenu()
+        removeBubble()
+        hideTarget()
+        petView?.visibility = View.INVISIBLE
+        publishStatus()
+        main.postDelayed({
+            PetScreenshot.capture(app) { result ->
+                val accepted = capture.finish(request)
+                petView?.visibility = View.VISIBLE
+                evaluate()
+                if (!accepted && result.path != null) PetScreenshot.discard(app, result.path)
+                reply(if (accepted) result.path else null)
+            }
+        }, ASK_SHOT_DELAY_MS)
+    }
+
+    private fun deliverVoice(
+        text: String,
+        target: AskTarget,
+        fresh: Boolean,
+        chat: AskTarget.AskChat?,
+        screenshot: String?,
+    ) {
+        val args = mapOf(
+            "offer" to target.offer,
+            "text" to text,
+            "fresh" to (chat?.sessionId == null),
+            "sessionId" to chat?.sessionId,
+            "host" to chat?.host,
+            "screenshot" to screenshot,
+        )
+        callDart("ask", args) { raw ->
+            val r = raw as? Map<*, *>
+            if (r?.get("sent") == true) {
+                voiceSession = r["sessionId"] as? String
+                voiceHost = r["host"] as? String
+                val orbSent = r["orb"] == true
+                Log.i(TAG, "orb voice: sent session=$voiceSession shot=${screenshot != null} orb=$orbSent")
+                voiceCapsule?.hide()
+                resetVoice()
+                if (orbSent) {
+                    showSentStrip(screenshot != null)
+                } else {
+                    showVoiceHint(AppStrings.get(app, R.string.pet_voice_sent))
+                }
+            } else {
+                voiceProblem((r?.get("problem") as? String) ?: AppStrings.get(app, R.string.pet_ask_failed))
+            }
+        }
+    }
+
+    private fun showVoiceHint(message: String) {
+        Toast.makeText(app, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun voiceProblem(message: String) {
+        orbVoice?.cancel()
+        orbVoice = null
+        stopVoiceTimer()
+        voiceTarget = null
+        voiceWav = null
+        voiceOfferRequest++
+        val capsule = ensureVoiceCapsule()
+        // A capture hid the capsule: bring it back for the error instead of failing silently.
+        if (capsule != null && !capsule.visible && !machine.appForeground) {
+            val pv = petView
+            val pp = petParams
+            val frames = loaded?.frames
+            if (pv != null && pp != null && frames != null) {
+                capsule.show(frames.body.at(restPos(pv, pp)), safeArea(), false)
+            }
+        }
+        val shown = capsule?.visible == true
+        capsule?.setHint(message, danger = true)
+        if (!shown) showVoiceHint(message)
+        val gen = ++voiceProblemGen
+        main.postDelayed({ if (gen == voiceProblemGen && orbVoice == null) capsule?.hide() }, 1_600)
+        Log.i(TAG, "orb voice: problem $message")
+    }
+
+    private fun resetVoice() {
+        voiceTarget = null
+        voiceWav = null
+        voiceCancel = false
+        voiceOfferRequest++
+        voiceProblemGen++
+    }
+
+    private fun scheduleVoiceTimer() {
+        stopVoiceTimer()
+        val r = object : Runnable {
+            override fun run() {
+                val v = orbVoice ?: return
+                voiceCapsule?.setElapsed(v.elapsedMs)
+                main.postDelayed(this, 100)
+            }
+        }
+        voiceTimer = r
+        main.postDelayed(r, 100)
+    }
+
+    private fun stopVoiceTimer() {
+        voiceTimer?.let(main::removeCallbacks)
+        voiceTimer = null
+    }
+
+    private fun cancelVoiceAndStrip() {
+        stopVoiceTimer()
+        orbVoice?.cancel()
+        orbVoice = null
+        voiceTarget = null
+        voiceWav = null
+        voiceOfferRequest++
+        voiceProblemGen++
+        voiceCapsule?.hide()
+        hideOrbStrip(animate = false)
+    }
+
+    private fun discardOrbLayers() {
+        cancelVoiceAndStrip()
+        orbStrip?.hide(animate = false)
+        orbStrip = null
+        voiceCapsule = null
+        orbBookmarks?.hide()
+        orbBookmarks = null
+        bookmarkItems = emptyList()
+        bookmarkProbeLoop?.let(main::removeCallbacks)
+        bookmarkProbeLoop = null
+        probeCycle?.let(main::removeCallbacks)
+        probeCycle = null
+        stripHide?.let(main::removeCallbacks)
+        stripHide = null
+    }
+
+    private fun ensureOrbStrip(): OrbStrip? {
+        orbStrip?.let { return it }
+        val ctx = hostContext ?: return null
+        val s = OrbStrip(
+            ctx = ctx,
+            windows = windows,
+            params = { w, h, flags, behind -> orbStripParams(w, h, flags, behind) },
+            add = { ticket, view, p ->
+                // A tuck variant asks for an application overlay under the accessibility host:
+                // that window must come from the app's own window context.
+                val manager = if (p.type == WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY && host == OverlayHost.ACCESSIBILITY) {
+                    appWindowContext().getSystemService(WindowManager::class.java)
+                } else {
+                    wm
+                }
+                runCatching { manager?.let { installWindow(ticket, view, it, p) } ?: false }.getOrDefault(false)
+            },
+            update = { v, p -> update(v, p) },
+            remove = { v -> remove(v) },
+            onStop = { onOrbStop() },
+        )
+        orbStrip = s
+        return s
+    }
+
+    private fun ensureVoiceCapsule(): OrbVoiceCapsule? {
+        voiceCapsule?.let { return it }
+        val ctx = hostContext ?: return null
+        val c = OrbVoiceCapsule(
+            ctx = ctx,
+            windows = windows,
+            params = { w, h, flags -> baseParams(w, h, flags) },
+            add = { ticket, view, p ->
+                runCatching { wm?.let { installWindow(ticket, view, it, p) } ?: false }.getOrDefault(false)
+            },
+            update = { v, p -> update(v, p) },
+            remove = { v -> remove(v) },
+        )
+        voiceCapsule = c
+        return c
+    }
+
+    private fun orbStripParams(w: Int, h: Int, flags: Int, behind: Boolean): WindowManager.LayoutParams {
+        val p = baseParams(w, h, flags)
+        if (behind) {
+            if (host == OverlayHost.ACCESSIBILITY) {
+                p.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                Log.i(TAG, "strip: application overlay under accessibility (behind)")
+            } else {
+                Log.w(TAG, "strip: tuck on application host; z-order may put the strip over the pet")
+            }
+        }
+        return p
+    }
+
+    private fun orbStripPlacement(variant: SeamVariant = SeamVariant.TONGUE): StripPlacement? {
+        val ctx = hostContext ?: return null
+        val pv = petView ?: return null
+        val pp = petParams ?: return null
+        val frames = loaded?.frames ?: return null
+        val rest = restPos(pv, pp)
+        return OrbStripGeometry.place(
+            safeArea(),
+            frames.body.at(rest),
+            pv.reach.at(rest),
+            dock.side,
+            variant,
+            ctx.resources.displayMetrics.density,
+        )
+    }
+
+    private fun showSentStrip(withShot: Boolean) {
+        if (machine.appForeground) return
+        // The bridge usually beats this placeholder: if the run is already known,
+        // show its live line/stop instead of overwriting it with 「已发送」.
+        if (orbRun?.running == true || orbRun?.state == "waiting-approval" || orbRun?.state == "waiting-question") {
+            syncOrbStrip()
+            return
+        }
+        val strip = ensureOrbStrip() ?: return
+        val place = orbStripPlacement() ?: return
+        orbStoppedAt = 0
+        orbStoppedSession = null
+        val line = AppStrings.get(app, R.string.pet_voice_sent) +
+            if (withShot) " · " + AppStrings.get(app, R.string.pet_voice_shot) else ""
+        strip.setStopVisible(true)
+        strip.setDot(OverlayPalette.of(hostContext ?: app).accent)
+        strip.show(place, line, animationsOn())
+        stripHide?.let(main::removeCallbacks)
+        val hide = Runnable { if (orbStrip === strip) strip.hide(animate = true) }
+        stripHide = hide
+        main.postDelayed(hide, SENT_STRIP_MS)
+        Log.i(TAG, "orb voice: sent strip ${strip.describe()}")
+    }
+
+    private fun onOrbStop() {
+        val run = orbRun
+        val sid = run?.sessionId ?: voiceSession
+        val host = run?.host ?: voiceHost
+        Log.i(TAG, "orb strip: stop session=$sid")
+        if (sid != null) {
+            callDart("orbStop", mapOf("host" to host, "sessionId" to sid)) { ok ->
+                Log.i(TAG, "orb strip: stop result=$ok")
+            }
+        }
+        orbStoppedAt = now()
+        orbStoppedSession = sid
+        orbRun = run?.copy(running = false, canStop = false, state = "done")
+        orbWasRunning = false
+        val strip = orbStrip ?: return
+        strip.setStopVisible(false)
+        strip.setDot(OverlayPalette.of(hostContext ?: app).muted)
+        strip.setLine(AppStrings.get(app, R.string.pet_orb_stopped))
+        stripHide?.let(main::removeCallbacks)
+        stripHide = null
+        orbDoneTimer?.let(main::removeCallbacks)
+        orbDoneTimer = null
+        main.postDelayed({ if (orbStrip === strip) strip.hide(animate = true) }, 1_200)
+    }
+
+    private fun hideOrbStrip(animate: Boolean = true) {
+        stripHide?.let(main::removeCallbacks)
+        stripHide = null
+        orbDoneTimer?.let(main::removeCallbacks)
+        orbDoneTimer = null
+        orbStrip?.hide(animate)
+        syncBookmarks()
+    }
+
+    // ---- 长条：悬浮球会话的实时状态 --------------------------------------------------------------
+
+    /** Dart's `pushOrb`: the local Orb conversation's running state, tool and stop availability. */
+    internal fun pushOrb(raw: Map<*, *>) {
+        if (raw["visible"] != true) {
+            orbRun = null
+            orbWasRunning = false
+            orbStoppedAt = 0
+            hideOrbStrip(animate = true)
+            if (askOrb) {
+                askView?.setStatus(null)
+                askView?.setStopMode(false)
+            }
+            return
+        }
+        val sessionId = raw["sessionId"] as? String ?: return
+        val host = raw["host"] as? String ?: return
+        // A cancel's turn-end can lag the stale running frame; keep it out.
+        if (raw["running"] == true && sessionId == orbStoppedSession && now() - orbStoppedAt < 5_000) {
+            Log.i(TAG, "orb strip: ignore stale running push after stop")
+            return
+        }
+        val run = OrbRun(
+            sessionId = sessionId,
+            host = host,
+            running = raw["running"] == true,
+            canStop = raw["canStop"] == true,
+            state = raw["state"] as? String ?: "done",
+            tool = raw["tool"] as? String,
+            text = raw["text"] as? String,
+        )
+        orbRun = run
+        if (askOrb) {
+            askView?.setStatus(orbLine(run), error = run.state == "error")
+            askView?.setStopMode(run.canStop)
+        }
+        syncOrbStrip()
+        syncBookmarks()
+    }
+
+    /** Shows/updates/hides the status strip from [orbRun] and the current foreground. */
+    private fun syncOrbStrip() {
+        val run = orbRun
+        if (!initialized || capture.inFlight || machine.appForeground || !interactive() || petView == null) {
+            hideOrbStrip(animate = false)
+            return
+        }
+        // The input bar is the strip while it types; it carries the same status line.
+        if (askView != null && askOrb) return
+        if (run == null) {
+            hideOrbStrip(animate = true)
+            orbWasRunning = false
+            return
+        }
+        val waiting = run.state == "waiting-approval" || run.state == "waiting-question"
+        if (run.running || waiting) {
+            orbDoneTimer?.let(main::removeCallbacks)
+            orbDoneTimer = null
+            stripHide?.let(main::removeCallbacks)
+            stripHide = null
+            showOrbStatus(run, done = false, error = false)
+            orbWasRunning = true
+            return
+        }
+        if (run.state == "error") {
+            showOrbStatus(run, done = false, error = true)
+            orbWasRunning = false
+            scheduleOrbHide(4_000)
+            return
+        }
+        // A stop key just acted: keep 「已停止」 rather than flipping to 「完成」.
+        if (now() - orbStoppedAt < 3_000) {
+            orbWasRunning = false
+            return
+        }
+        if (orbWasRunning) {
+            showOrbStatus(run, done = true, error = false)
+            orbWasRunning = false
+            scheduleOrbHide(3_000)
+        } else {
+            hideOrbStrip(animate = true)
+        }
+    }
+
+    private fun showOrbStatus(run: OrbRun, done: Boolean, error: Boolean) {
+        val strip = ensureOrbStrip() ?: return
+        val place = orbStripPlacement() ?: return
+        val palette = OverlayPalette.of(hostContext ?: app)
+        strip.setStopVisible(run.canStop && !done && !error)
+        strip.setDot(
+            when {
+                error -> palette.danger
+                done -> 0xFF2E7D32.toInt()
+                run.state == "waiting-approval" || run.state == "waiting-question" -> 0xFFE0A400.toInt()
+                else -> palette.accent
+            },
+        )
+        val line = orbLine(run, done, error)
+        strip.show(place, line, animate = !strip.visible)
+        Log.i(TAG, "orb strip: ${run.state} line=$line stop=${run.canStop} ${strip.describe()}")
+        syncBookmarks()
+    }
+
+    private fun scheduleOrbHide(ms: Long) {
+        orbDoneTimer?.let(main::removeCallbacks)
+        val r = Runnable { hideOrbStrip(animate = true) }
+        orbDoneTimer = r
+        main.postDelayed(r, ms)
+    }
+
+    private fun orbLine(run: OrbRun?, done: Boolean = false, error: Boolean = false): String {
+        if (run == null) return ""
+        if (error) {
+            val reason = run.text?.trim()?.takeIf { it.isNotEmpty() }?.take(40)
+            return AppStrings.get(app, R.string.pet_orb_failed) + if (reason != null) "：$reason" else ""
+        }
+        if (done) return AppStrings.get(app, R.string.pet_orb_done)
+        return when (run.state) {
+            "waiting-approval" -> AppStrings.get(app, R.string.pet_orb_waiting_approval)
+            "waiting-question" -> AppStrings.get(app, R.string.pet_orb_waiting_question)
+            "error" -> AppStrings.get(app, R.string.pet_orb_failed)
+            else -> orbToolLine(run.tool)
+        }
+    }
+
+    private fun orbToolLine(tool: String?): String {
+        val name = tool.orEmpty().lowercase()
+        val res = when {
+            name.contains("screen") -> R.string.pet_orb_screen
+            name.contains("tap") || name.contains("click") -> R.string.pet_orb_tap
+            name.contains("type") || name.contains("input") || name.contains("text") -> R.string.pet_orb_type
+            name.contains("scroll") || name.contains("swipe") -> R.string.pet_orb_scroll
+            name.contains("bash") || name.contains("shell") || name.contains("terminal") -> R.string.pet_orb_shell
+            name.contains("web") || name.contains("search") || name.contains("fetch") -> R.string.pet_orb_web
+            name.contains("background_agent") -> R.string.pet_orb_background
+            name.contains("device_agent") -> R.string.pet_orb_device
+            else -> R.string.pet_orb_working
+        }
+        return AppStrings.get(app, res)
+    }
+
+    // ---- 书签：本机后台 + 跨设备任务 ------------------------------------------------------------
+
+    /** Dart's `pushBookmarks`; the items survive a hidden strip and reappear with it. */
+    internal fun pushBookmarks(raw: Map<*, *>) {
+        val visible = raw["visible"] == true
+        bookmarkItems = if (!visible) {
+            emptyList()
+        } else {
+            (raw["items"] as? List<*>).orEmpty().mapNotNull { item ->
+                val m = item as? Map<*, *> ?: return@mapNotNull null
+                val id = m["id"] as? String ?: return@mapNotNull null
+                val sessionId = m["sessionId"] as? String ?: return@mapNotNull null
+                OrbBookmark(
+                    id = id,
+                    kind = (m["kind"] as? String) ?: "background",
+                    sessionId = sessionId,
+                    nodeId = m["nodeId"] as? String,
+                    title = (m["title"] as? String)?.takeIf { it.isNotBlank() } ?: AppStrings.get(app, R.string.pet_orb_task),
+                    status = (m["status"] as? String) ?: "running",
+                    startedAt = (m["startedAt"] as? Number)?.toLong() ?: now(),
+                    endedAt = (m["endedAt"] as? Number)?.toLong(),
+                    unread = m["unread"] == true,
+                    deviceName = m["deviceName"] as? String,
+                )
+            }
+        }
+        Log.i(TAG, "bookmarks push visible=$visible items=${bookmarkItems.size}")
+        syncBookmarks()
+    }
+
+    private fun syncBookmarks() {
+        val anchor = if (
+            initialized && !capture.inFlight && !machine.appForeground && interactive() &&
+            petView != null && bookmarkItems.isNotEmpty()
+        ) {
+            bookmarkAnchor()
+        } else {
+            null
+        }
+        if (anchor == null) {
+            orbBookmarks?.hide()
+            return
+        }
+        val bookmarks = ensureBookmarks() ?: return
+        bookmarks.show(bookmarkItems, anchor, safeArea(), dock.side, animate = !bookmarks.visible)
+    }
+
+    private fun bookmarkAnchor(): ScreenRect? {
+        val strip = orbStrip
+        if (strip?.visible == true) strip.current?.strip?.let { return it }
+        val v = askView
+        val p = askParams
+        if (v != null && p != null) {
+            val h = if (v.height > 0) v.height else v.measuredHeight
+            if (h > 0 && p.width > 0) return ScreenRect(p.x, p.y, p.x + p.width, p.y + h)
+        }
+        return null
+    }
+
+    private fun ensureBookmarks(): OrbBookmarks? {
+        orbBookmarks?.let { return it }
+        val ctx = hostContext ?: return null
+        val b = OrbBookmarks(
+            ctx = ctx,
+            windows = windows,
+            params = { w, h -> baseParams(w, h, 0) },
+            add = { ticket, view, p ->
+                runCatching { wm?.let { installWindow(ticket, view, it, p) } ?: false }.getOrDefault(false)
+            },
+            update = { v, p -> update(v, p) },
+            remove = { v -> remove(v) },
+            onOpen = { openBookmark(it) },
+            onDismiss = { dismissBookmark(it) },
+            onOverflow = { onBookmarkOverflow() },
+        )
+        orbBookmarks = b
+        return b
+    }
+
+    private fun openBookmark(b: OrbBookmark) {
+        Log.i(TAG, "bookmark open ${b.id} kind=${b.kind} session=${b.sessionId}")
+        callDart("bookmarkOpen", mapOf("id" to b.id)) { }
+        if (b.kind == "device" && b.nodeId != null) {
+            openIntent(
+                EntryActivity.openMesh(app, b.nodeId, b.sessionId, b.title, b.deviceName ?: b.nodeId),
+                null,
+            )
+        } else {
+            open(b.sessionId, LOCAL_HOST, b.title)
+        }
+    }
+
+    private fun dismissBookmark(b: OrbBookmark) {
+        Log.i(TAG, "bookmark dismiss ${b.id}")
+        callDart("bookmarkDismiss", mapOf("id" to b.id)) { }
+        bookmarkItems = bookmarkItems.filterNot { it.id == b.id }
+        syncBookmarks()
+    }
+
+    private fun onBookmarkOverflow() {
+        openIntent(EntryActivity.openApp(app), null)
+    }
+
+    private fun hideBookmarks() {
+        orbBookmarks?.hide()
+    }
+
+    // ---- E1/E5 probe（debug builds only; PetOverlayProbe forwards `cmd strip`） ------------------
+
+    /** Debug: the strip's stop key without finding its pixels on screen. */
+    internal fun probeStop() {
+        Log.i(TAG, "probe stop")
+        onOrbStop()
+    }
+
+    /** Debug: a fake strip + bookmark rows for the P3 visual check. */
+    internal fun probeBookmarks(show: Boolean) {
+        bookmarkProbeLoop?.let(main::removeCallbacks)
+        bookmarkProbeLoop = null
+        if (!show) {
+            bookmarkItems = emptyList()
+            orbRun = null
+            orbWasRunning = false
+            hideBookmarks()
+            hideOrbStrip(animate = false)
+            return
+        }
+        if (!initialized || petView == null) return
+        val run = OrbRun("probe-bg", LOCAL_HOST, true, true, "running", null, null)
+        val fake = mapOf(
+            "visible" to true,
+            "items" to listOf(
+                mapOf(
+                    "id" to "bg:probe-1", "kind" to "background", "sessionId" to "probe-1",
+                    "title" to "整理照片", "status" to "running",
+                    "startedAt" to now() - 32_000, "unread" to false,
+                ),
+                mapOf(
+                    "id" to "bg:probe-2", "kind" to "background", "sessionId" to "probe-2",
+                    "title" to "查资料", "status" to "completed",
+                    "startedAt" to now() - 600_000, "endedAt" to now() - 300_000, "unread" to true,
+                ),
+                mapOf(
+                    "id" to "dev:probe-node:probe-3", "kind" to "device", "sessionId" to "probe-3",
+                    "nodeId" to "probe-node", "title" to "改文档", "status" to "completed",
+                    "startedAt" to now() - 900_000, "endedAt" to now() - 800_000, "unread" to true,
+                    "deviceName" to "书房 Mac",
+                ),
+                mapOf(
+                    "id" to "dev:probe-node:probe-4", "kind" to "device", "sessionId" to "probe-4",
+                    "nodeId" to "probe-node", "title" to "编译", "status" to "running",
+                    "startedAt" to now() - 20_000, "unread" to false, "deviceName" to "win32-asus",
+                ),
+                mapOf(
+                    "id" to "bg:probe-5", "kind" to "background", "sessionId" to "probe-5",
+                    "title" to "第五个", "status" to "running",
+                    "startedAt" to now() - 10_000, "unread" to false,
+                ),
+            ),
+        )
+        val loop = object : Runnable {
+            private var left = 20
+
+            override fun run() {
+                if (left-- <= 0) {
+                    bookmarkProbeLoop = null
+                    return
+                }
+                orbRun = run
+                showOrbStatus(run, done = false, error = false)
+                pushBookmarks(fake)
+                main.postDelayed(this, 500)
+            }
+        }
+        bookmarkProbeLoop = loop
+        loop.run()
+    }
+
+    /** Debug: send a text to the local orb exactly as the input bar/voice would (no UI). */
+    internal fun probeSay(text: String) {
+        if (!initialized || !interactive()) {
+            Log.i(TAG, "probe say: no pet")
+            return
+        }
+        callDart("askTarget", mapOf("fresh" to false, "orb" to true)) { raw ->
+            val target = AskTarget.fromMap(raw)
+            if (target == null) {
+                Log.i(TAG, "probe say: no target")
+                return@callDart
+            }
+            if (target.problem != null) {
+                voiceProblem(target.problem)
+                return@callDart
+            }
+            val fresh = target.current == null
+            val chat = target.chat(fresh)
+            Log.i(TAG, "probe say: fresh=$fresh session=${chat?.sessionId} offer=${target.offer}")
+            deliverVoice(text, target, fresh, chat, null)
+        }
+    }
+
+    internal fun probeStrip(show: Boolean, variant: String?, animate: Boolean, cycle: Boolean, line: String?) {
+        if (!initialized || !interactive() || petView == null) {
+            Log.i(TAG, "strip probe: no pet")
+            return
+        }
+        probeCycle?.let(main::removeCallbacks)
+        probeCycle = null
+        if (cycle) {
+            cycleStripProbe(line)
+            return
+        }
+        if (!show) {
+            hideOrbStrip(animate = false)
+            Log.i(TAG, "strip probe: hidden")
+            return
+        }
+        val seam = when (variant) {
+            "edge" -> SeamVariant.EDGE
+            "tuck12" -> SeamVariant.TUCK12
+            "tuck28" -> SeamVariant.TUCK28
+            else -> SeamVariant.TONGUE
+        }
+        showStripProbe(seam, animate, line)
+    }
+
+    private fun showStripProbe(variant: SeamVariant, animate: Boolean, line: String?) {
+        val strip = ensureOrbStrip() ?: run {
+            Log.i(TAG, "strip probe: no host")
+            return
+        }
+        val place = orbStripPlacement(variant) ?: run {
+            Log.i(TAG, "strip probe: no placement")
+            return
+        }
+        probeVariant = variant
+        strip.setStopVisible(true)
+        strip.setDot(OverlayPalette.of(hostContext ?: app).accent)
+        strip.show(place, line ?: AppStrings.get(app, R.string.pet_orb_probe_line), animate && animationsOn())
+        Log.i(TAG, "strip probe: variant=$variant dock=${dock.side} ${strip.describe()}")
+    }
+
+    private fun cycleStripProbe(line: String?) {
+        val variants = listOf(SeamVariant.TONGUE, SeamVariant.EDGE, SeamVariant.TUCK12, SeamVariant.TUCK28)
+        var index = 0
+        val run = object : Runnable {
+            override fun run() {
+                if (index >= variants.size) {
+                    hideOrbStrip(animate = false)
+                    probeCycle = null
+                    return
+                }
+                showStripProbe(variants[index++], animate = false, line)
+                main.postDelayed(this, PROBE_STEP_MS)
+            }
+        }
+        probeCycle = run
+        main.post(run)
     }
 
     // ---- 语音问 ---------------------------------------------------------------------------------

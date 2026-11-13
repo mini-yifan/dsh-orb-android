@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/live_activity_state.dart';
 import '../ui/common/app_dialog.dart';
 import 'overlay_channel.dart';
+import 'orb_bookmarks.dart';
+import 'orb_strip_bridge.dart';
 import 'pet_overlay_actions.dart';
 import 'pet_signals.dart';
 import 'pet_state.dart';
@@ -23,6 +25,10 @@ final petOverlayPushProvider = Provider<Future<void> Function(PetState state)>(
 /// native side in tests, or the overlay is off.
 final petOverlayBridgeProvider = Provider<void>((ref) {
   ref.watch(petOverlayActionBridgeProvider);
+  // The strip's own payload follows the local Orb conversation.
+  ref.watch(orbStripBridgeProvider);
+  // The bookmark rows follow the same conversation + the Mesh tasks.
+  ref.watch(orbBookmarksBridgeProvider);
   // The status bar's live activity tells the same state in words.
   ref.watch(liveActivityBridgeProvider);
   ref.listen<PetState>(petStateProvider, (previous, next) {

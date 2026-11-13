@@ -195,6 +195,88 @@ class MeshFrames {
   final int cursor;
 }
 
+/// One `device_agent` task, from the local `/.dsh-mesh/v1/tasks` route. The
+/// floating strip uses `originNodeId` to keep only tasks this phone dispatched.
+class MeshTaskFile {
+  const MeshTaskFile({
+    required this.name,
+    required this.size,
+    required this.direction,
+    required this.state,
+  });
+
+  factory MeshTaskFile.fromJson(Object? raw) {
+    final json = _record(raw);
+    return MeshTaskFile(
+      name: _string(json['name']),
+      size: _integer(json['size']),
+      direction: _string(json['direction']),
+      state: _string(json['state']),
+    );
+  }
+
+  final String name;
+  final int size;
+  final String direction;
+  final String state;
+}
+
+class MeshTask {
+  const MeshTask({
+    required this.taskId,
+    required this.originNodeId,
+    required this.targetNodeId,
+    required this.sessionId,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.workspaceId,
+    this.prompt,
+    this.callerSessionId,
+    this.files = const [],
+  });
+
+  factory MeshTask.fromJson(Object? raw) {
+    final json = _record(raw);
+    final workspace = _string(json['workspaceId']);
+    final prompt = _string(json['prompt']);
+    final caller = _string(json['callerSessionId']);
+    return MeshTask(
+      taskId: _string(json['taskId']),
+      originNodeId: _string(json['originNodeId']),
+      targetNodeId: _string(json['targetNodeId']),
+      sessionId: _string(json['sessionId']),
+      status: _string(json['status'], 'unknown'),
+      createdAt: _integer(json['createdAt']),
+      updatedAt: _integer(json['updatedAt']),
+      workspaceId: workspace.isEmpty ? null : workspace,
+      prompt: prompt.isEmpty ? null : prompt,
+      callerSessionId: caller.isEmpty ? null : caller,
+      files: [for (final item in _list(json['files'])) MeshTaskFile.fromJson(item)],
+    );
+  }
+
+  final String taskId;
+  final String originNodeId;
+  final String targetNodeId;
+  final String sessionId;
+
+  /// running | waiting-input | done | failed | cancelled | unknown
+  final String status;
+  final int createdAt;
+  final int updatedAt;
+  final String? workspaceId;
+
+  /// The asking text, for the bookmark + task cards.
+  final String? prompt;
+
+  /// The local conversation that called `device_agent`, for attribution.
+  final String? callerSessionId;
+  final List<MeshTaskFile> files;
+
+  bool get running => status == 'running' || status == 'waiting-input';
+}
+
 class MeshApiException implements Exception {
   const MeshApiException(this.statusCode, this.code, this.message);
 
@@ -219,6 +301,45 @@ class MeshApi {
   Future<MeshStatus> status() async => MeshStatus.fromJson(await _get('/status'));
 
   Future<MeshTree> tree() async => MeshTree.fromJson(await _get('/tree'));
+
+  /// The device tasks that involve this node, for the bookmark strip and task
+  /// cards. The contract's route answers a bare array; tolerate `{tasks}` too.
+  Future<List<MeshTask>> tasks() async {
+    final decoded = await _getAny('/tasks');
+    final list = decoded is List ? decoded : (decoded is Map ? _list(decoded['tasks']) : const <Object?>[]);
+    return [for (final item in list) MeshTask.fromJson(item)];
+  }
+
+  Future<List<MeshNode>> nodes() async {
+    final decoded = await _getAny('/nodes');
+    final list = decoded is List ? decoded : (decoded is Map ? _list(decoded['nodes']) : const <Object?>[]);
+    return [for (final item in list) MeshNode.fromJson(item)];
+  }
+
+  /// Like [_get] but the body may be an array (`/tasks`, `/nodes`).
+  Future<Object?> _getAny(String path) async {
+    final response = await connection.get('$_root$path');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      Map<String, Object?> body = const {};
+      if (response.body.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(response.text);
+          if (decoded is Map) body = decoded.cast<String, Object?>();
+        } catch (_) {
+          // The error message below still covers plain text.
+        }
+      }
+      final code = _string(body['error'], 'http_${response.statusCode}');
+      final message = _string(body['message'], response.text.trim());
+      throw MeshApiException(response.statusCode, code, message.isEmpty ? code : message);
+    }
+    if (response.body.isEmpty) return null;
+    try {
+      return jsonDecode(response.text);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<MeshFrames> page(String nodeId, String sessionId) async {
     final body = await _get('/sessions/${_segment(nodeId)}/${_segment(sessionId)}/page');

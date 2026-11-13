@@ -27,6 +27,9 @@ sealed class LauncherEntry {
     final host = raw['host'];
     final text = raw['text'] is String ? raw['text'] as String : '';
     final path = raw['path'];
+    final nodeId = raw['nodeId'];
+    final title = raw['title'] is String ? raw['title'] as String : '';
+    final nodeName = raw['nodeName'] is String ? raw['nodeName'] as String : '';
     return switch (raw['kind']) {
       'new' => NewChatEntry(text: text),
       'voice' => NewChatEntry(voice: true, text: text),
@@ -35,6 +38,8 @@ sealed class LauncherEntry {
         HostRef.decode(host is String ? host : null),
         sessionId,
       ),
+      'mesh' when nodeId is String && nodeId.isNotEmpty && sessionId is String && sessionId.isNotEmpty =>
+        MeshEntry(nodeId: nodeId, sessionId: sessionId, title: title, nodeName: nodeName),
       _ => null,
     };
   }
@@ -63,6 +68,21 @@ class OpenChatEntry extends LauncherEntry {
 
   final HostRef host;
   final String sessionId;
+}
+
+/// A `device_agent` task bookmark: open the Mesh conversation for it.
+class MeshEntry extends LauncherEntry {
+  const MeshEntry({
+    required this.nodeId,
+    required this.sessionId,
+    this.title = '',
+    this.nodeName = '',
+  });
+
+  final String nodeId;
+  final String sessionId;
+  final String title;
+  final String nodeName;
 }
 
 /// A conversation as a launcher shortcut.

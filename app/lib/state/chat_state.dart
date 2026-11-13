@@ -14,6 +14,7 @@ import 'connection_state.dart';
 import 'hosts_state.dart';
 import 'models_state.dart';
 import 'notify_state.dart' show appForegroundProvider;
+import 'phone_state.dart';
 import 'run_pulse.dart';
 import 'sessions_state.dart';
 
@@ -1283,6 +1284,11 @@ class ChatController extends Notifier<ChatState> {
       clearError: !state.streamLost,
       clearNotice: true,
     );
+    // A new turn after 「停止」: the phone control keeps the conversation's task
+    // stopped until it is resumed. Await the resume, but never let a slow or
+    // native-less phone status hold the message: the status read is bounded.
+    if (!running) await _resumePhoneTask();
+    if (!_currentOperation(operation)) return false;
     try {
       if (beforeDeliver != null) {
         final go = await beforeDeliver(requestId);
@@ -1341,6 +1347,34 @@ class ChatController extends Notifier<ChatState> {
       _pending = List.unmodifiable(_pending.where((p) => p.requestId != requestId));
       state = state.copyWith(pending: _placePending(), error: _sendFailure(e));
       return false;
+    }
+  }
+
+  /// A stopped phone task survives a turn end; a new user message is a new run
+  /// and should be allowed to use the phone again. Best effort: an older native
+  /// side or a task still finishing just leaves the phone tools stopped.
+  Future<void> _resumePhoneTask() async {
+    try {
+      // Without a native phone control there is no task to resume, and the
+      // send never waits on a status read that cannot answer.
+      if (!ref.read(phoneProvider).status.ready) return;
+      final phone = ref.read(phoneProvider.notifier);
+      for (var attempt = 0; attempt < 4; attempt++) {
+        await phone.refreshStatus().timeout(
+          const Duration(milliseconds: 300),
+          onTimeout: () => false,
+        );
+        if (!ref.mounted) return;
+        final tasks = ref.read(phoneProvider).status.tasks;
+        final task = tasks.where((t) => t.sessionId == sessionId).firstOrNull;
+        if (task == null || !task.stopped) return;
+        final id = task.id;
+        if (id == null) return;
+        if (await phone.resumeTask(id)) return;
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+    } catch (_) {
+      // The phone control is optional for a text-only turn.
     }
   }
 

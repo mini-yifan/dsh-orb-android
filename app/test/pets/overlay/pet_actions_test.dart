@@ -7,6 +7,7 @@ import 'package:dsh_app/notify/chat_alerts.dart';
 import 'package:dsh_app/pets/pet_overlay_actions.dart';
 import 'package:dsh_app/pets/pet_signals.dart';
 import 'package:dsh_app/pets/pet_state.dart';
+import 'package:dsh_app/state/attachments.dart';
 import 'package:dsh_app/state/connection_state.dart';
 import 'package:dsh_app/state/hosts_state.dart';
 import 'package:dsh_app/state/sessions_state.dart';
@@ -34,8 +35,14 @@ class _Client extends DshClient {
   DshMux get mux => testMux;
   final prompts = <(String, String, String?)>[];
   final promptImages = <List<PromptImage>>[];
+  final cancels = <String>[];
   bool fail = false;
   bool running = false;
+
+  @override
+  Future<void> cancel(String sessionId) async {
+    cancels.add(sessionId);
+  }
   @override
   Stream<DshEvent> watch(String id, {WatchOptions options = const WatchOptions()}) async* {
     yield SessionSnapshotEvent.fromJson(id, {
@@ -157,6 +164,31 @@ void main() {
     expect(client.prompts.single.$3, isNotEmpty);
     expect(container.read(petAskedProvider), contains(const PetTarget(HostRef.local, 'existing')));
     expect(sessions.creates, 0);
+  });
+
+  test('orbTarget switches a remote active host back to this phone', () async {
+    container.read(activeHostProvider.notifier).select(const HostRef.ssh('other'));
+    final target = await actions.handle(const MethodCall('askTarget', {'fresh': false, 'orb': true})) as Map;
+    expect(container.read(activeHostProvider), HostRef.local);
+    expect(target['shot'], true);
+    expect((target['fresh'] as Map)['host'], HostRef.local.encode());
+  });
+
+  test('orbTarget reuses the conversation the strip remembers', () async {
+    sessions.replace([session('existing', title: 'Work', preset: orbPhonePreset)]);
+    container.read(orbSessionProvider.notifier).remember(const PetTarget(HostRef.local, 'existing'));
+    final target = await actions.handle(const MethodCall('askTarget', {'fresh': false, 'orb': true})) as Map;
+    expect((target['current'] as Map)['sessionId'], 'existing');
+    expect(target['shot'], true);
+  });
+
+  test('orbStop stops the session the strip owns, without the pet target check', () async {
+    final ok = await actions.handle(MethodCall('orbStop', {
+      'host': HostRef.local.encode(),
+      'sessionId': 'existing',
+    }));
+    expect(ok, true);
+    expect(client.cancels, ['existing']);
   });
 
   test('fresh send creates once and uses the new session', () async {

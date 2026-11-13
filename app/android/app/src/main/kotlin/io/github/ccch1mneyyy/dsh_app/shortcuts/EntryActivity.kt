@@ -39,6 +39,9 @@ class EntryActivity : Activity() {
                     screenshot?.let { putExtra(ShortcutsPlugin.EXTRA_PATH, it.path) }
                     intent.getStringExtra(EXTRA_SESSION)?.let { putExtra(ShortcutsPlugin.EXTRA_SESSION, it) }
                     intent.getStringExtra(EXTRA_HOST)?.let { putExtra(ShortcutsPlugin.EXTRA_HOST, it) }
+                    intent.getStringExtra(EXTRA_NODE)?.let { putExtra(ShortcutsPlugin.EXTRA_NODE, it) }
+                    intent.getStringExtra(EXTRA_TITLE)?.let { putExtra(ShortcutsPlugin.EXTRA_TITLE, it) }
+                    intent.getStringExtra(EXTRA_NODE_NAME)?.let { putExtra(ShortcutsPlugin.EXTRA_NODE_NAME, it) }
                     // 问一句's text the pet couldn't send: into the composer, unsent. Only from the pet.
                     if (intent.hasExtra(EXTRA_PET_GENERATION)) {
                         intent.getStringExtra(EXTRA_TEXT)?.take(MAX_TEXT)?.let { putExtra(ShortcutsPlugin.EXTRA_TEXT, it) }
@@ -63,12 +66,16 @@ class EntryActivity : Activity() {
         const val ACTION_NEW_CHAT = "io.github.ccch1mneyyy.dsh_app.action.NEW_CHAT"
         const val ACTION_VOICE = "io.github.ccch1mneyyy.dsh_app.action.VOICE_INPUT"
         const val ACTION_OPEN_CHAT = "io.github.ccch1mneyyy.dsh_app.action.OPEN_CHAT"
+        const val ACTION_OPEN_MESH = "io.github.ccch1mneyyy.dsh_app.action.OPEN_MESH"
         const val ACTION_SCREENSHOT = "io.github.ccch1mneyyy.dsh_app.action.SCREENSHOT"
         private const val ACTION_OPEN_APP = "io.github.ccch1mneyyy.dsh_app.action.OPEN_APP"
         const val EXTRA_PET_GENERATION = "pet_generation"
         const val EXTRA_SESSION = "session_id"
         const val EXTRA_HOST = "host"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_NODE = "mesh_node_id"
+        const val EXTRA_TITLE = "mesh_title"
+        const val EXTRA_NODE_NAME = "mesh_node_name"
         private const val EXTRA_PATH = "screenshot_path"
         private const val MAX_TEXT = 4_000
 
@@ -76,6 +83,7 @@ class EntryActivity : Activity() {
             ACTION_NEW_CHAT -> ShortcutsPlugin.KIND_NEW
             ACTION_VOICE -> ShortcutsPlugin.KIND_VOICE
             ACTION_OPEN_CHAT -> ShortcutsPlugin.KIND_CHAT
+            ACTION_OPEN_MESH -> ShortcutsPlugin.KIND_MESH
             ACTION_SCREENSHOT -> ShortcutsPlugin.KIND_SCREENSHOT
             else -> null
         }
@@ -93,6 +101,14 @@ class EntryActivity : Activity() {
             Intent(context, EntryActivity::class.java).setAction(ACTION_OPEN_CHAT).apply {
                 putExtra(EXTRA_SESSION, sessionId)
                 if (host != null) putExtra(EXTRA_HOST, host)
+            }
+
+        fun openMesh(context: Context, nodeId: String, sessionId: String, title: String?, nodeName: String?): Intent =
+            Intent(context, EntryActivity::class.java).setAction(ACTION_OPEN_MESH).apply {
+                putExtra(EXTRA_NODE, nodeId)
+                putExtra(EXTRA_SESSION, sessionId)
+                if (title != null) putExtra(EXTRA_TITLE, title)
+                if (nodeName != null) putExtra(EXTRA_NODE_NAME, nodeName)
             }
     }
 }

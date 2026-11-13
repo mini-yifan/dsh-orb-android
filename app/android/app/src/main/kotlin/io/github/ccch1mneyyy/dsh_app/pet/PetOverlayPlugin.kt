@@ -16,10 +16,10 @@ import io.github.ccch1mneyyy.dsh_app.notify.LiveActivity
  * MethodChannel `dsh/pet_overlay` (Dart: `lib/pets/overlay_channel.dart`).
  *
  * Dart → here:
- * - `push {state, tier, bubble?: {id, kind, text, title?, host, sessionId, untilMs, detail?,
- *   ask?: {eventId, kind, text, approvable, choices}}, sessionId?, host?, active, foreground, packId,
- *   size, canStop, hosts: [{ref, label, current}]}`: the state PetMood reduced; nothing is reduced
+ * - `push {state, tier, bubble?: ...}`: the state PetMood reduced; nothing is reduced
  *   again here (`foreground` is read from the activity lifecycle instead);
+ * - `pushOrb {visible, sessionId?, host?, state, running, canStop, tool?, text?}`: the local Orb
+ *   conversation's live status for the floating strip;
  * - `reloadPack {id}`: a brought pet's files changed (imported again, removed); the overlay and the
  *   live activity's portrait read it again;
  * - `setEnabled {enabled}`, `setAlwaysShow {on}`, `unsnooze` → status;
@@ -97,6 +97,14 @@ class PetOverlayPlugin : FlutterPlugin, ActivityAware {
         when (call.method) {
             "push" -> {
                 (call.arguments as? Map<*, *>)?.let(PetOverlay::push)
+                result.success(null)
+            }
+            "pushOrb" -> {
+                (call.arguments as? Map<*, *>)?.let(PetOverlay::pushOrb)
+                result.success(null)
+            }
+            "pushBookmarks" -> {
+                (call.arguments as? Map<*, *>)?.let(PetOverlay::pushBookmarks)
                 result.success(null)
             }
             "reloadPack" -> {

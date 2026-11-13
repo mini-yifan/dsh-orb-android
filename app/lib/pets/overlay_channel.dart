@@ -153,6 +153,30 @@ class PetOverlayChannel {
     }
   }
 
+  /// The floating strip's live status, separate from the pet's mood: the
+  /// local Orb session's running state, current tool and stop availability.
+  Future<void> pushOrb(Map<String, Object?> state) async {
+    try {
+      await channel.invokeMethod<void>('pushOrb', state);
+    } on MissingPluginException {
+      // Tests, desktop: no overlay.
+    } on PlatformException {
+      // A bad push is not worth failing the strip over.
+    }
+  }
+
+  /// The bookmark rows (`{visible, items: [{id, kind, sessionId, nodeId, title,
+  /// status, startedAt, endedAt, unread, deviceName}]}`).
+  Future<void> pushBookmarks(Map<String, Object?> state) async {
+    try {
+      await channel.invokeMethod<void>('pushBookmarks', state);
+    } on MissingPluginException {
+      // Tests, desktop: no overlay.
+    } on PlatformException {
+      // Not worth failing the strip over.
+    }
+  }
+
   /// A brought pet's files changed (imported again, removed): the overlay
   /// reads [id] from disk again if it is the one out, instead of keeping the
   /// old picture (it keys what it loaded by id and size only).
