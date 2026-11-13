@@ -106,6 +106,24 @@ class PhoneScreenshotToolTest {
         assertNull(savedBytes)
     }
 
+    @Test fun systemSettingsPageIsRefusedEvenThoughScreenMayReadIt() {
+        captured = ScreenSnapshot("s1", "", "Settings", "com.android.settings",
+            image = jpeg, imageMime = "image/jpeg", readPackages = setOf("com.android.settings"))
+        val out = call()
+        assertTrue(out.isError)
+        assertNull(savedBytes)
+        assertTrue(out.text.contains("只看不动"))
+    }
+
+    @Test fun systemSettingsPageIsAllowedWhenThePersonLiftedThatRule() {
+        captured = ScreenSnapshot("s1", "", "Settings", "com.android.settings",
+            image = jpeg, imageMime = "image/jpeg", readPackages = setOf("com.android.settings"))
+        policies = PhonePolicies(unlocks = PhoneUnlocks(systemPages = true))
+        val out = call()
+        assertFalse(out.isError)
+        assertArrayEquals(jpeg, savedBytes)
+    }
+
     @Test fun lockedPhoneIsRefused() {
         locked = true
         val out = call()

@@ -354,7 +354,7 @@ class SystemActions(private val app: Context) : SystemApi {
 
     override fun saveScreenshot(jpeg: ByteArray): ScreenshotSaved {
         val stored = ScreenshotShare.save(app, jpeg)
-        return ScreenshotSaved(stored.path, ScreenshotShare.clipboard(app, stored.uri))
+        return ScreenshotSaved(stored.path, ScreenshotShare.clipboard(app, stored.uri, stored.path))
     }
 
     private fun <T> onMain(block: () -> T): T? {

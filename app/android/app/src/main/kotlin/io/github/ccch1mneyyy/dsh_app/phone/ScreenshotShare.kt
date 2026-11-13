@@ -88,10 +88,17 @@ object ScreenshotShare {
         return ScreenshotStore(path, uri)
     }
 
-    /** ClipboardService grants the URI's read permission to whoever pastes the clip. */
-    fun clipboard(context: Context, uri: Uri): Boolean = try {
+    /**
+     * The clip leads with the image URI. ClipboardService grants that URI to whichever app calls
+     * getPrimaryClip, so a paster can copy the bytes. A text item follows so a target that only
+     * reads text still learns where the file is. A ROM preview may fail to re-read the URI as the
+     * `android` package; that is its own clipboard preview and never the paste path.
+     */
+    fun clipboard(context: Context, uri: Uri, path: String): Boolean = try {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newUri(context.contentResolver, "DSH screenshot", uri))
+        val clip = ClipData.newUri(context.contentResolver, "DSH screenshot", uri)
+        clip.addItem(ClipData.Item("DSH screenshot → $path"))
+        cm.setPrimaryClip(clip)
         true
     } catch (_: Exception) {
         false

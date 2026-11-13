@@ -864,7 +864,9 @@ class PhoneCore(
     }
 
     /** `screenshot`: save a clean screenshot to Downloads and copy it to the clipboard.
-     *  The exact same read policy as `screen` decides whether the frame may leave the driver. */
+     *  Taking the frame out to shared storage and the global clipboard is a write-shaped effect,
+     *  so it needs the read policy *and* the hard system-page rule; a page the agent may only
+     *  read is never allowed to leave the phone as an image. */
     private fun screenshot(a: Args, owner: PhoneTasks.Owner): Out {
         if (!current(owner)) return stoppedOut("screenshot")
         val which = if (a.bool("background") == true) PhoneScreen.BACKGROUND else PhoneScreen.MAIN
@@ -879,6 +881,14 @@ class PhoneCore(
         if (!current(owner)) return stoppedOut(summary)
         val snap = driver.captureImage()
         if (!current(owner) || !tasks.setAppIfCurrent(owner, snap.appLabel)) return stoppedOut(summary)
+        // System settings / permission / installer pages are read-only by policy. Saving the
+        // image outside the phone is not a read, so the lifted-limits flag decides here too.
+        if (SafetyRules.isSystemPackage(snap.packageName) && !env.policies().unlocks.systemPages) {
+            val app = snap.appLabel ?: snap.packageName ?: "系统界面"
+            // l10n:keep agent safety result
+            return Out("系统设置 / 权限 / 安装页（「$app」）只看不动，不保存截图。需要的话用 handoff 交给用户。",
+                error = true, screen = null, app = app, summary = summary, decision = "refused:system-page")
+        }
         // filterScreen drops the image for deny-listed apps, secure pages, card / ID numbers,
         // and any image source that is not allowed to be read. Never save a refused frame.
         val shown = safety.filterScreen(snap)

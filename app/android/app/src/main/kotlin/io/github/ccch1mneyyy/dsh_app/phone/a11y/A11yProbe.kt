@@ -18,6 +18,7 @@ import io.github.ccch1mneyyy.dsh_app.phone.PhoneAppIdentity
 import io.github.ccch1mneyyy.dsh_app.phone.background.Reasons
 import io.github.ccch1mneyyy.dsh_app.phone.PhoneAction
 import io.github.ccch1mneyyy.dsh_app.phone.PhoneControl
+import io.github.ccch1mneyyy.dsh_app.phone.SafetyRules
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -29,7 +30,8 @@ import java.util.concurrent.Executors
  * `files/a11y-probe/last.txt` (+ `last.jpg`), read with `run-as`.
  *
  *   am broadcast -a io.github.ccch1mneyyy.dsh_app.A11Y_PROBE --es cmd screen [--ez image true] [--ez detail true] --ei seq 1
- *   cmd: screen | target sid id | tap sid id [long] | type sid id text [submit] | scroll sid [id] dir |
+ *   cmd: screen | shot (clean screenshot) | save (capture + policy + Downloads + clipboard) |
+ *        target sid id | tap sid id [long] | type sid id text [submit] | scroll sid [id] dir |
  *        key back|home|recents|notifications | tapxy sid x y | open pkg | collect sid id [pages] [until] |
  *        fg | windows | status [text] | confirm sentence [app] [first] | handoff reason [ms] | injecttest [relax] | guard |
  *        begin (a task starts, as on a tool call) | finish [session] [host] [reopen] (what Dart's finishTask does) |
@@ -91,6 +93,27 @@ internal class A11yProbe(private val service: PhoneA11yService, private val driv
                 "screen" -> driver.observe(a.b("detail"), a.b("image")).let { s ->
                     image = s.image
                     "id=${s.id} pkg=${s.packageName} secure=${s.secure} poor=${s.poorTree} image=${s.image?.size ?: 0}B ${s.imageMime ?: ""}\n${s.text}"
+                }
+                "shot" -> driver.captureImage().let { s ->
+                    image = s.image
+                    "id=${s.id} pkg=${s.packageName} secure=${s.secure} image=${s.image?.size ?: 0}B ${s.imageMime ?: ""}"
+                }
+                "save" -> {
+                    // The real tool path: driver capture + system-page rule + read filter + save.
+                    val control = PhoneControl.get(service)
+                    val snap = driver.captureImage()
+                    if (SafetyRules.isSystemPackage(snap.packageName) && !control.policies().unlocks.systemPages) {
+                        image = null
+                        "refused: system-page ${snap.packageName}"
+                    } else {
+                        val shown = control.core.safety.filterScreen(snap)
+                        val jpeg = shown.image
+                        if (jpeg == null) "refused: no image (secure=${shown.secure})" else {
+                            image = jpeg
+                            val saved = control.system.saveScreenshot(jpeg)
+                            "path=${saved.path} clipboard=${saved.clipboard} bytes=${jpeg.size}"
+                        }
+                    }
                 }
                 "target" -> driver.target(a.s("sid")!!, a.i("id")!!).toString()
                 "tap" -> result(driver.perform(PhoneAction.Tap(a.s("sid")!!, a.i("id")!!, a.b("long"))))
