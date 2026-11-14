@@ -53,11 +53,8 @@ class NotificationGate(
     override fun confirm(request: ConfirmRequest): Decision {
         PhoneRegistry.promptGate?.let { return it.confirm(request) }
         if (!available()) return Decision.UNAVAILABLE
-        // Without the unified presenter, a visual request can only authorize this step;
-        // its three slots must not silently remove the one-shot alternative.
         // Three buttons fit a heads-up: 本任务免确认 makes "allow" waive the rest of the task.
         val allow = when {
-            request.visualScope != null -> AppStrings.get(app, R.string.overlay_allow_once)
             request.offerTaskWaiver -> AppStrings.get(app, R.string.overlay_allow_task_no_ask)
             request.firstInApp -> AppStrings.get(app, R.string.overlay_allow_task)
             else -> AppStrings.get(app, R.string.overlay_allow_once)
@@ -73,7 +70,6 @@ class NotificationGate(
         )
         return when (choice) {
             "allow" -> when {
-                request.visualScope != null -> Decision.ALLOW_ONCE
                 request.offerTaskWaiver -> Decision.ALLOW_ALL_FOR_TASK
                 request.firstInApp -> Decision.ALLOW_APP_FOR_TASK
                 else -> Decision.ALLOW_ONCE

@@ -241,11 +241,10 @@ data class ConfirmRequest(
     val offerTaskWaiver: Boolean = false,
     /** Exact native task lifetime; never inferred from the visible conversation. */
     val owner: PhoneTasks.Owner? = null,
-    val visualScope: VisualScope? = null,
 )
 
-/** Ordinary task waivers do not authorize independent visual scopes or bypass hard rules. */
-enum class Decision { ALLOW_ONCE, ALLOW_APP_FOR_TASK, ALLOW_ALL_FOR_TASK, ALLOW_VISUAL_FOR_TASK, DENY, STOP, UNAVAILABLE }
+/** Ordinary task waivers do not bypass hard rules. */
+enum class Decision { ALLOW_ONCE, ALLOW_APP_FOR_TASK, ALLOW_ALL_FOR_TASK, DENY, STOP, UNAVAILABLE }
 
 enum class HandoffResult { CONTINUE, STOP, TIMEOUT }
 

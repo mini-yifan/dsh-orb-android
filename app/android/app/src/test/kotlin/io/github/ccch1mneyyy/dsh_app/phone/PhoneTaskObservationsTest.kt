@@ -206,18 +206,6 @@ class PhoneTaskObservationsTest {
         assertNotNull(MainScreenDriver.refuseHalted(allowed)) // A new lifetime cannot admit the old dispatch.
     }
 
-    @Test fun actualLedgerRevokesScopeOnTextOnlyObservationBeforeAComesBack() {
-        val tasks = PhoneTasks(); val physical = Driver(); val owner = owner(tasks)
-        val bound = PhoneTaskObservations(tasks).bind(physical, owner)
-        val a = VisualScope.Main(Any(), Any(), 1, "app")
-        physical.scope = a; bound.observe(false, false)
-        assertTrue(tasks.confirmVisualIfCurrent(owner, a))
-        physical.scope = null; bound.observe(false, false)
-        assertFalse(tasks.confirmVisualIfCurrent(owner, a))
-        physical.scope = a; bound.observe(false, false)
-        assertFalse(tasks.hasVisualGrant(owner, a))
-    }
-
     @Test fun additionalPolicyGateCannotBypassTheOriginalObservationOwner() {
         val physical = Driver(); val firstTasks = PhoneTasks(); val otherTasks = PhoneTasks()
         val first = PhoneTaskObservations(firstTasks).bind(physical, owner(firstTasks))

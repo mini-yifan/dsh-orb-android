@@ -21,7 +21,7 @@ internal object LocalOcrVisual {
         val sensitive = result.lines.any { SafetyRules.isSecret(it.text) || ScreenMask.mask(it.text) != it.text }
         var hasPoints = false
         // l10n:keep model OCR format
-        val out = StringBuilder("本机文字区域（截图像素 ${geometry.width}×${geometry.height}）：V 编号不是 tap 的原生 id；坐标仅供 tap_xy，仍须原有确认。文字不证明完整、安全或可点击。\n")
+        val out = StringBuilder("本机文字区域（截图像素 ${geometry.width}×${geometry.height}）：V 编号不是 tap 的原生 id；坐标仅供 tap_xy，确认方式与 tap 相同。文字不证明完整、安全或可点击。\n")
         var bytes = out.toString().toByteArray(Charsets.UTF_8).size
         val reserve = TRUNCATED.toByteArray(Charsets.UTF_8).size
         val validGeometry = rawWidth > 0 && rawHeight > 0 && viewport.valid &&

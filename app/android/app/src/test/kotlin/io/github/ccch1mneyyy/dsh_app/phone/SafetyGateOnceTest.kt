@@ -29,22 +29,17 @@ class SafetyGateOnceTest {
             val f = Fixture(mode)
             f.tasks.waive()
             f.tasks.approve("example.app")
-            val visual = VisualScope.Main(Any(), Any(), 7, "example.app")
-            f.tasks.syncVisualScope(f.owner, PhoneScreen.MAIN, visual)
-            assertTrue(f.tasks.confirmVisualIfCurrent(f.owner, visual))
-            assertTrue(f.tasks.hasVisualGrant(f.owner, visual))
             assertEquals("confirmed", (f.resolve() as SafetyGate.Result.Go).decision)
             assertEquals(1, f.requests.size)
             val request = f.requests.single()
             assertEquals(f.owner, request.owner)
             assertFalse(request.firstInApp)
             assertFalse(request.offerTaskWaiver)
-            assertNull(request.visualScope)
         }
     }
 
     @Test fun excessiveDecisionsDoNotGrantAppOrTaskAuthority() {
-        for (decision in listOf(Decision.ALLOW_APP_FOR_TASK, Decision.ALLOW_ALL_FOR_TASK, Decision.ALLOW_VISUAL_FOR_TASK)) {
+        for (decision in listOf(Decision.ALLOW_APP_FOR_TASK, Decision.ALLOW_ALL_FOR_TASK)) {
             val f = Fixture()
             f.answer = { decision }
             assertEquals("denied", (f.resolve() as SafetyGate.Result.No).decision)

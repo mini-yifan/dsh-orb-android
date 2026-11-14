@@ -64,14 +64,16 @@ class PhoneCoordinateImageCommitTest {
         override fun close() { core.worker.shutdown() }
     }
 
-    @Test fun retainedImageCommitsThroughRealOwnerLedgerAndBackgroundTapStillConfirms() {
+    /** In ALWAYS mode a coordinate tap is not confirmed; the one-image/one-gesture rule still
+     * stops a second action on the same observation. */
+    @Test fun retainedImageCommitsThroughRealOwnerLedgerAndIsConsumedOnce() {
         Fixture().use { f ->
             assertFalse(f.read().isError)
             assertEquals(1, f.acceptCalls)
             assertFalse(f.tap().isError)
-            assertEquals(1, f.confirmations)
+            assertEquals(0, f.confirmations)
             assertTrue(f.tap().isError) // Same image cannot authorize a second action.
-            assertEquals(2, f.confirmations)
+            assertEquals(0, f.confirmations)
         }
     }
 

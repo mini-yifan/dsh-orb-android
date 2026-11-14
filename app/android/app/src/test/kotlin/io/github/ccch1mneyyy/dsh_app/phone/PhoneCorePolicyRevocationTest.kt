@@ -139,15 +139,12 @@ class PhoneCorePolicyRevocationTest {
         assertEquals(3, asked)
     }
 
-    @Test fun aVisualGrantCannotCoverANewOrdinaryConfirmationRequirement() {
-        policies = PhonePolicies(confirmMode = ConfirmMode.ALWAYS)
-        main.scope = VisualScope.Main(Any(), Any(), 1, "example.app")
+    @Test fun aTightenedPolicyDuringCoordinateConfirmationIsReReadBeforeDispatch() {
+        policies = PhonePolicies(confirmMode = ConfirmMode.ASK)
         observe()
-        confirm = { request ->
-            assertNotNull(request.visualScope)
-            policies = policies.copy(confirmMode = ConfirmMode.ASK,
-                confirmEveryWritePackages = listOf("example.app"))
-            Decision.ALLOW_VISUAL_FOR_TASK
+        confirm = {
+            policies = policies.copy(denyPackages = listOf("example.app"))
+            Decision.ALLOW_ONCE
         }
         val result = coordinate()
         assertTrue(result.isError)
@@ -182,14 +179,12 @@ class PhoneCorePolicyRevocationTest {
 
     @Test fun theQueuedCoordinateClaimAlsoChecksTheCurrentPolicy() {
         policies = PhonePolicies(confirmMode = ConfirmMode.ALWAYS)
-        main.scope = VisualScope.Main(Any(), Any(), 1, "example.app")
         observe()
-        confirm = { Decision.ALLOW_VISUAL_FOR_TASK }
         main.beforeDispatch = { policies = policies.copy(denyPackages = listOf("example.app")) }
         assertTrue(coordinate().isError)
         var claimed = 0
         assertFalse(checkNotNull(main.capturedAdmission).invoke { claimed++; true })
-        assertEquals(0, claimed); assertEquals(0, main.writes)
+        assertEquals(0, claimed); assertEquals(0, main.writes); assertEquals(0, asked)
     }
 
     @Test fun aPolicyRefusalAfterTheFirstSideEffectReportsUnknownPartialEffects() {

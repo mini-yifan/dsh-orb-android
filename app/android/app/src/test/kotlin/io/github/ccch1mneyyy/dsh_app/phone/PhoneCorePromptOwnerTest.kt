@@ -1455,7 +1455,6 @@ class PhoneCorePromptOwnerTest {
         assertEquals(1, main.focusCloses)
         assertFalse(focusRequests.single().offerTaskWaiver)
         assertFalse(focusRequests.single().firstInApp)
-        assertNull(focusRequests.single().visualScope)
     }
 
     @Test fun focusCannotUseDirectOrExpiredObservationResponse() {

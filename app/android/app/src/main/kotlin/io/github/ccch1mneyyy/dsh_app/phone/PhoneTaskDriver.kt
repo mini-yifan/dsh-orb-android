@@ -31,7 +31,6 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
             if (!tasks.runIfCurrent(owner) {
                 synchronized(seen) {
                     seen[driver.screen] = Seen(driver, snapshot.id, owner)
-                    tasks.syncVisualScope(owner, driver.screen, driver.visualScope(snapshot.id))
                 }
             }) throw InterruptedException()
             return snapshot
@@ -43,14 +42,13 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
         }
         override fun observe(detail: Boolean, image: Boolean): ScreenSnapshot {
             current()
-            return try { remember(driver.observe(detail, image)) } finally { syncCurrentScope() }
+            return remember(driver.observe(detail, image))
         }
         override fun observe(detail: Boolean, image: Boolean, automaticImage: Boolean): ScreenSnapshot {
             current()
-            return try { remember(driver.observe(detail, image, automaticImage)) } finally { syncCurrentScope() }
+            return remember(driver.observe(detail, image, automaticImage))
         }
-        /** A clean screenshot publishes no id, so it registers no observation; still bound to the
-         * owner and it never refreshes the visual scope (no coordinate permission is implied). */
+        /** A clean screenshot publishes no id, so it registers no observation. */
         override fun captureImage(): ScreenSnapshot {
             current()
             return driver.captureImage()
@@ -63,20 +61,9 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
                     if (value != null && value.driver === driver && value.id == screenId &&
                         value.owner.taskId == owner.taskId && value.owner.lifecycle == owner.lifecycle) {
                         driver.acceptVisualObservation(screenId) // Memory only; Tasks -> ledger -> driver state.
-                        tasks.syncVisualScope(owner, driver.screen, driver.visualScope(screenId))
                     }
                 }
             }) throw InterruptedException()
-        }
-        private fun syncCurrentScope() {
-            tasks.runIfCurrent(owner) {
-                synchronized(seen) {
-                    val value = seen[driver.screen]
-                    val scope = if (value != null && value.driver === driver && value.owner.taskId == owner.taskId && value.owner.lifecycle == owner.lifecycle)
-                        driver.visualScope(value.id) else null
-                    tasks.syncVisualScope(owner, driver.screen, scope)
-                }
-            }
         }
         override fun visualScope(screenId: String): VisualScope? {
             current()
@@ -85,24 +72,23 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
         override fun coordinateTarget(action: PhoneAction.TapXY): VisualTarget? {
             current()
             if (!owns(action.screenId)) return null
-            val target = try { driver.coordinateTarget(action) } finally { syncCurrentScope() }
+            val target = driver.coordinateTarget(action)
             current()
             return target?.takeIf { owns(action.screenId) && driver.visualScope(action.screenId) == it.scope }
         }
         override fun target(screenId: String, elementId: Int): TargetInfo? {
             current()
-            return try { if (owns(screenId)) driver.target(screenId, elementId) else null } finally { syncCurrentScope() }
+            return if (owns(screenId)) driver.target(screenId, elementId) else null
         }
         override fun prepareFocusInput(screenId: String): Either<String, FocusInput> {
             current()
             if (!owns(screenId)) return Either.Left("这个屏幕编号不属于本任务的当前观察，请重新 screen。") // l10n:keep agent focus result
             // Capturing nodes or an input connection must never run under Tasks or ledger locks.
             val prepared = driver.prepareFocusInput(screenId)
-            if (prepared is Either.Left) { current(); syncCurrentScope(); return prepared }
+            if (prepared is Either.Left) { current(); return prepared }
             val original = (prepared as Either.Right).value
             var handedOff = false
             try {
-                syncCurrentScope()
                 current()
                 if (!owns(screenId))
                     return Either.Left("准备输入期间观察已经改变，没有输入；请重新 screen。") // l10n:keep agent focus result
@@ -110,9 +96,7 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
                     override fun perform(text: String, allowed: () -> Boolean): ActionResult {
                         current()
                         if (!owns(screenId)) return ActionResult(false, "原焦点观察已经改变，没有输入；请重新 screen。") // l10n:keep agent focus result
-                        return try {
-                            result(original.perform(text) { taskAllowed() && owns(screenId) && allowed() })
-                        } finally { syncCurrentScope() }
+                        return result(original.perform(text) { taskAllowed() && owns(screenId) && allowed() })
                     }
                 }
                 handedOff = true
@@ -125,7 +109,7 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
             current()
             if (!taskAllowed()) return Either.Left("当前任务已暂停，未准备路线动作。") // l10n:keep
             val prepared = driver.prepareSkillReplayStep(step)
-            if (prepared is Either.Left) { current(); syncCurrentScope(); return prepared }
+            if (prepared is Either.Left) { current(); return prepared }
             val original = (prepared as Either.Right).value
             var handedOff = false
             try {
@@ -135,12 +119,9 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
                     override val dispatchUncertain: Boolean get() = original.dispatchUncertain
                     override fun perform(allowed: () -> Boolean): ActionResult {
                         current()
-                        return try {
-                            val value = original.perform { taskAllowed() && allowed() }
-                            current()
-                            value // Private route evidence is not a model-returned observation/ledger grant.
-                        }
-                        finally { syncCurrentScope() }
+                        val value = original.perform { taskAllowed() && allowed() }
+                        current()
+                        return value // Private route evidence is not a model-returned observation/ledger grant.
                     }
                 }
                 handedOff = true
@@ -161,16 +142,14 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
                 // l10n:keep agent observation ownership result
                 return ActionResult(false, "这个屏幕编号不属于本任务的当前观察。请本任务重新 screen，不要使用另一对话的编号。")
             }
-            return try {
-                result(driver.perform(action, { taskAllowed() && allowed() }, { claim ->
-                    var committed = false
-                    tasks.runIfCurrent(owner) {
-                        if (!tasks.isPaused && allowed())
-                            committed = coordinateAdmission?.invoke(claim) ?: claim()
-                    }
-                    committed
-                }, { sources -> taskAllowed() && actionSourcesAllowed(sources) }))
-            } finally { syncCurrentScope() }
+            return result(driver.perform(action, { taskAllowed() && allowed() }, { claim ->
+                var committed = false
+                tasks.runIfCurrent(owner) {
+                    if (!tasks.isPaused && allowed())
+                        committed = coordinateAdmission?.invoke(claim) ?: claim()
+                }
+                committed
+            }, { sources -> taskAllowed() && actionSourcesAllowed(sources) }))
         }
         override fun collect(screenId: String, listElementId: Int, maxPages: Int, until: String?): CollectResult =
             collect(screenId, listElementId, maxPages, until) { true }
@@ -184,23 +163,21 @@ class PhoneTaskObservations(private val tasks: PhoneTasks) {
                              scrollSourcesAllowed: (Set<String>) -> Boolean): CollectResult {
             current()
             if (!owns(screenId)) return CollectResult(emptyList(), 0, "屏幕编号不属于本任务，请重新 screen", null, rejection = CollectRejection.INVALID_TARGET) // l10n:keep agent observation ownership result
-            return try {
-                val result = driver.collect(screenId, listElementId, maxPages, until,
-                    { taskAllowed() && allowed() }, { pkg -> taskAllowed() && canRead(pkg) },
-                    { sources -> taskAllowed() && scrollSourcesAllowed(sources) })
-                current()
-                result.screen?.let(::remember)
-                result
-            } finally { syncCurrentScope() }
+            val result = driver.collect(screenId, listElementId, maxPages, until,
+                { taskAllowed() && allowed() }, { pkg -> taskAllowed() && canRead(pkg) },
+                { sources -> taskAllowed() && scrollSourcesAllowed(sources) })
+            current()
+            result.screen?.let(::remember)
+            return result
         }
         override fun open(target: PhoneAppIdentity): ActionResult = open(target) { true }
         override fun open(target: PhoneAppIdentity, allowed: () -> Boolean): ActionResult {
             current()
-            return try { result(driver.open(target) { taskAllowed() && allowed() }) } finally { syncCurrentScope() }
+            return result(driver.open(target) { taskAllowed() && allowed() })
         }
         override fun foregroundPackage(): String? {
             current()
-            return try { driver.foregroundPackage() } finally { syncCurrentScope() }
+            return driver.foregroundPackage()
         }
     }
 }

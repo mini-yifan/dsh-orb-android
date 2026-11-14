@@ -155,43 +155,37 @@ class SafetyGateTest {
         assertNull(secure.image)
         assertFalse(secure.text.contains("ordinary"))
     }
-    @Test fun unknownCoordinatesAndLongSwipeIgnoreOrdinaryWaivers() {
-        for (mode in ConfirmMode.entries) {
+    /** A tap_xy is a write like any other: once the task/app is waived it is allowed directly,
+     * including long presses and swipes. There is no coordinate-only extra question. */
+    @Test fun coordinatesAndAllGesturesFollowOrdinaryWaivers() {
+        for (mode in listOf(ConfirmMode.TASK, ConfirmMode.ALWAYS)) {
             val tasks = PhoneTasks().apply { begin(); waive() }
             val gate = SafetyGate({ PhonePolicies(confirmMode = mode) }, tasks, { null })
-            for (gesture in listOf(PhoneAction.CoordinateGesture.LONG, PhoneAction.CoordinateGesture.SWIPE)) {
+            for (gesture in PhoneAction.CoordinateGesture.entries) {
                 val action = PhoneAction.TapXY("s1", 10, 20, gesture, 30, 40, 400)
-                repeat(2) {
-                    val verdict = gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
-                        point = 10 to 20, coordinate = action) as SafetyGate.Verdict.Confirm
-                    assertFalse(verdict.request.firstInApp)
-                    assertFalse(verdict.request.offerTaskWaiver)
-                }
+                assertSame(SafetyGate.Verdict.Allow, gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
+                    point = 10 to 20, coordinate = action))
             }
-            assertTrue(gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
-                point = 10 to 20, coordinate = PhoneAction.TapXY("s1", 10, 20)) is SafetyGate.Verdict.Confirm)
         }
     }
 
-    @Test fun backgroundCoordinatesAlwaysAskEvenAfterAppAndTaskApprovalInEveryMode() {
-        for (mode in ConfirmMode.entries) {
-            val tasks = PhoneTasks().apply { begin(); waive(); approve("example.app") }
-            val gate = SafetyGate({ PhonePolicies(confirmMode = mode) }, tasks, { null })
-            for (gesture in PhoneAction.CoordinateGesture.entries) {
-                val action = PhoneAction.TapXY("b1", 10, 20, gesture, 30, 40, 400)
-                repeat(2) {
-                    val verdict = gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
-                        point = 10 to 20, coordinate = action, screen = PhoneScreen.BACKGROUND) as SafetyGate.Verdict.Confirm
-                    assertFalse(verdict.request.offerTaskWaiver)
-                    assertFalse(verdict.request.firstInApp)
-                    assertTrue(verdict.request.sentence.contains("这是最近后台截图的位置"))
-                }
-            }
-            assertTrue(gate.checkWrite(WriteKind.TAP_XY, null, SafetyRules.DEFAULT_DENY.first(), "Blocked",
-                coordinate = PhoneAction.TapXY("b1", 1, 1), screen = PhoneScreen.BACKGROUND) is SafetyGate.Verdict.Refuse)
-            assertTrue(gate.checkWrite(WriteKind.TAP_XY, null, "com.android.settings", "Settings",
-                coordinate = PhoneAction.TapXY("b1", 1, 1), screen = PhoneScreen.BACKGROUND) is SafetyGate.Verdict.Refuse)
-        }
+    /** In ASK mode the first coordinate tap asks the ordinary first-in-app question; the
+     * background-screen hint is appended. Hard refusals still apply to coordinates. */
+    @Test fun askModeCoordinatesAskOnceAndHardRefusalsStillApply() {
+        val tasks = PhoneTasks().apply { begin() }
+        val gate = SafetyGate({ PhonePolicies() }, tasks, { null })
+        val verdict = gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
+            point = 10 to 20, coordinate = PhoneAction.TapXY("b1", 10, 20), screen = PhoneScreen.BACKGROUND) as SafetyGate.Verdict.Confirm
+        assertEquals("first-in-app", verdict.reason)
+        assertTrue(verdict.request.firstInApp)
+        assertTrue(verdict.request.sentence.contains("这是最近后台截图的位置"))
+        tasks.approve("example.app")
+        assertSame(SafetyGate.Verdict.Allow, gate.checkWrite(WriteKind.TAP_XY, null, "example.app", "Example",
+            point = 10 to 20, coordinate = PhoneAction.TapXY("b1", 10, 20), screen = PhoneScreen.BACKGROUND))
+        assertTrue(gate.checkWrite(WriteKind.TAP_XY, null, SafetyRules.DEFAULT_DENY.first(), "Blocked",
+            coordinate = PhoneAction.TapXY("b1", 1, 1), screen = PhoneScreen.BACKGROUND) is SafetyGate.Verdict.Refuse)
+        assertTrue(gate.checkWrite(WriteKind.TAP_XY, null, "com.android.settings", "Settings",
+            coordinate = PhoneAction.TapXY("b1", 1, 1), screen = PhoneScreen.BACKGROUND) is SafetyGate.Verdict.Refuse)
     }
 
 }

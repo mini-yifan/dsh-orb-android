@@ -158,7 +158,7 @@ class PhoneCore(
                 var confirmed = false
                 val refusal = AtomicReference<SafetyGate.Result.No?>(null)
                 fun writeVerdict() = safety.checkWrite(WriteKind.TAP, target, selection.app.packageName,
-                    target?.appLabel, null, false, null, null, screen, null)
+                    target?.appLabel, null, false, null, null, screen)
                 if (!plan.alreadySatisfied) {
                     if (target == null) return stop("当前页面没有唯一可操作目标。") // l10n:keep replay result
                     val verdict = writeVerdict()
@@ -1147,12 +1147,13 @@ class PhoneCore(
         }
         if (env.isLocked()) return locked(summary)
         lastScreen = which
-        val visual = (action as? PhoneAction.TapXY)?.let { driver.coordinateTarget(it) }
+        // A tap_xy is located purely by pixel: no element target is resolved here, so it is
+        // confirmed like any other write (by ConfirmMode / first-in-app / hard rules) with no
+        // separate coordinate permission. The driver still enforces screenshot freshness,
+        // window continuity and secret-screen refusal at execution time.
         val target: TargetInfo? = if (id != null && kind != WriteKind.TAP_XY) {
             driver.target(sid, id) ?: return stale(driver, sid, summary, owner)
-        } else {
-            visual?.target
-        }
+        } else null
         val secret = kind == WriteKind.TYPE && SafetyRules.isSecretTarget(target)
         if (kind == WriteKind.TYPE && !secret) {
             summary = ui.get("phone_log_type", "输入 %1\$s#%2\$d（%3\$d 字%4\$s）", sid, id!!, typed!!.length, if (submit) ui.get("phone_log_submit", "，提交") else "") // l10n:keep test default
@@ -1160,25 +1161,12 @@ class PhoneCore(
         val pkg = target?.packageName ?: driver.foregroundPackage()
         val appLabel = target?.appLabel
         val app = appLabel ?: pkg
-        fun writeVerdict() = safety.checkWrite(kind, target, pkg, appLabel, typed, submit, point, action as? PhoneAction.TapXY, which, visual)
+        fun writeVerdict() = safety.checkWrite(kind, target, pkg, appLabel, typed, submit, point, action as? PhoneAction.TapXY, which)
         val verdict = writeVerdict()
-        var ordinaryConfirmed = verdict is SafetyGate.Verdict.Confirm
-        var decision = when (val r = safety.resolve(verdict, scope, owner)) {
+        val ordinaryConfirmed = verdict is SafetyGate.Verdict.Confirm
+        val decision = when (val r = safety.resolve(verdict, scope, owner)) {
             is SafetyGate.Result.No -> return Out(r.message, error = true, app = app, summary = summary, decision = r.decision)
             is SafetyGate.Result.Go -> r.decision
-        }
-        if (action is PhoneAction.TapXY && visual != null &&
-            !(verdict is SafetyGate.Verdict.Confirm && verdict.reason == "tap_xy")) {
-            val visualVerdict = safety.checkVisual(action, visual, owner)
-            when (val r = safety.resolve(visualVerdict, scope, owner)) {
-                is SafetyGate.Result.No -> return Out(r.message, error = true, app = app, summary = summary, decision = r.decision)
-                is SafetyGate.Result.Go -> {
-                    if (r.decision != "allowed") decision = r.decision
-                    // checkVisual can require an ordinary once for a newly ineligible coordinate.
-                    if (visualVerdict is SafetyGate.Verdict.Confirm && visualVerdict.request.visualScope == null)
-                        ordinaryConfirmed = true
-                }
-            }
         }
         // Re-read at the existing physical admission gates too: waiting for confirmation, target
         // resolution or channel capacity must not preserve an obsolete allow/waiver. This is a

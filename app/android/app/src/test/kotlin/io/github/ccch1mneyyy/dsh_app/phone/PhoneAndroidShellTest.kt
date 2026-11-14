@@ -147,7 +147,6 @@ class PhoneAndroidShellTest {
             assertFalse(ask.firstInApp)
             assertNull(ask.packageName)
             assertNull(ask.appLabel)
-            assertNull(ask.visualScope)
             assertEquals(1, f.dispatches)
         }
     }
