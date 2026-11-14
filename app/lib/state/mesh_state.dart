@@ -152,12 +152,15 @@ class MeshStatus {
     this.connection = 'unpaired',
     this.peersOnline = 0,
     this.peersTotal = 0,
+    this.error,
+    this.defaultServer = '',
   });
 
   factory MeshStatus.fromJson(Object? raw) {
     final json = _record(raw);
     final server = _record(json['server']);
     final node = _record(json['node']);
+    final error = _string(json['error']);
     return MeshStatus(
       paired: json['paired'] == true,
       serverUrl: _string(server['url']),
@@ -166,6 +169,8 @@ class MeshStatus {
       connection: _string(json['connection'], 'unpaired'),
       peersOnline: _integer(json['peersOnline']),
       peersTotal: _integer(json['peersTotal']),
+      error: error.isEmpty ? null : error,
+      defaultServer: _string(json['defaultServer']),
     );
   }
 
@@ -177,7 +182,56 @@ class MeshStatus {
   final int peersOnline;
   final int peersTotal;
 
+  /// Why the runtime is offline, when the plugin knows; shown instead of a bare
+  /// 「离线」 so a startup failure is actionable.
+  final String? error;
+
+  /// Origin the sign-in switch offers first. Empty means the deployment bundled
+  /// none and the address field has to be filled in.
+  final String defaultServer;
+
   bool get connected => connection == 'connected';
+}
+
+/// The approval hand-off the browser has to finish: created by
+/// [MeshApi.startLink] and completed by the phone polling [MeshApi.pollLink].
+class MeshLinkStart {
+  const MeshLinkStart({required this.approvalUrl, required this.linkId, required this.expiresAt});
+
+  factory MeshLinkStart.fromJson(Object? raw) {
+    final json = _record(raw);
+    return MeshLinkStart(
+      approvalUrl: _string(json['approvalUrl']),
+      linkId: _string(json['linkId']),
+      expiresAt: _integer(json['expiresAt']),
+    );
+  }
+
+  /// The page the phone opens in the system browser; approving there is what
+  /// hands this device its credentials.
+  final String approvalUrl;
+  final String linkId;
+
+  /// Epoch milliseconds the link stops being collectable.
+  final int expiresAt;
+}
+
+/// One `/link/poll` answer: `pending` while the browser has not approved yet,
+/// `status` once it has and the plugin adopted the credentials.
+class MeshLinkPoll {
+  const MeshLinkPoll({required this.pending, this.status});
+
+  factory MeshLinkPoll.fromJson(Object? raw) {
+    final json = _record(raw);
+    final status = _record(json['status']);
+    return MeshLinkPoll(
+      pending: json['pending'] != false,
+      status: status.isEmpty ? null : MeshStatus.fromJson(status),
+    );
+  }
+
+  final bool pending;
+  final MeshStatus? status;
 }
 
 class MeshEvent {
@@ -380,6 +434,29 @@ class MeshApi {
       'pairing': pairing,
       if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
     });
+  }
+
+  /// Hosted mode, step 1: ask for a link and get the browser URL back.
+  ///
+  /// Returns immediately — the approval happens in the browser, and this phone
+  /// must not hold a request open for it.
+  Future<MeshLinkStart> startLink(String serverUrl, {String? name}) async =>
+      MeshLinkStart.fromJson(await _post('/link', {
+        'serverUrl': serverUrl,
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      }));
+
+  /// Hosted mode, step 2: one collect attempt. `pending` means keep polling.
+  Future<MeshLinkPoll> pollLink() async =>
+      MeshLinkPoll.fromJson(await _post('/link/poll', const <String, Object?>{}));
+
+  /// Stop waiting for an approval the user gave up on.
+  Future<void> cancelLink() async => _post('/link/cancel', const <String, Object?>{});
+
+  /// Whether a link is still waiting for its browser approval.
+  Future<bool> linkPending() async {
+    final body = await _get('/link/status');
+    return body['pending'] == true;
   }
 
   Future<void> unpair() async => _post('/unpair', const <String, Object?>{});

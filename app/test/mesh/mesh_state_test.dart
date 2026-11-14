@@ -19,6 +19,56 @@ void main() {
       expect(status.peersOnline, 1);
     });
 
+    test('reads the default server and the offline reason the plugin reports', () {
+      final status = MeshStatus.fromJson({
+        'paired': false,
+        'connection': 'unpaired',
+        'peersOnline': 0,
+        'peersTotal': 0,
+        'defaultServer': 'https://mesh.example',
+      });
+      expect(status.defaultServer, 'https://mesh.example');
+
+      final failed = MeshStatus.fromJson({
+        'paired': true,
+        'server': {'url': 'https://mesh.example', 'fp': ''},
+        'connection': 'offline',
+        'peersOnline': 0,
+        'peersTotal': 0,
+        'error': 'boom',
+      });
+      // A startup failure is shown instead of a bare 「离线」, so this has to survive parsing.
+      expect(failed.error, 'boom');
+      expect(failed.connected, isFalse);
+    });
+
+    test('parses a link start and keeps pending polls distinct from an approved one', () {
+      final started = MeshLinkStart.fromJson({
+        'approvalUrl': 'https://mesh.example/app/link/link-1',
+        'linkId': 'link-1',
+        'expiresAt': 4102444800000,
+      });
+      expect(started.approvalUrl, 'https://mesh.example/app/link/link-1');
+      expect(started.linkId, 'link-1');
+
+      final pending = MeshLinkPoll.fromJson({'pending': true});
+      expect(pending.pending, isTrue);
+      expect(pending.status, isNull);
+
+      final approved = MeshLinkPoll.fromJson({
+        'pending': false,
+        'status': {
+          'paired': true,
+          'server': {'url': 'https://mesh.example', 'fp': ''},
+          'connection': 'connected',
+          'peersOnline': 0,
+          'peersTotal': 0,
+        },
+      });
+      expect(approved.pending, isFalse);
+      expect(approved.status?.paired, isTrue);
+    });
+
     test('parses a nested tree and attaches node/workspace ids to sessions', () {
       final tree = MeshTree.fromJson({
         'cursor': 7,

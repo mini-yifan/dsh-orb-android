@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/l10n.dart';
 import '../../state/mesh_state.dart';
 import '../common/overview_card.dart';
 import '../common/status_dot.dart';
-import '../remote/pairing_page.dart' show pairingScannerProvider;
 import '../settings/settings_widgets.dart';
 import '../shell/page_frame.dart';
 import '../theme/app_icons.dart';
@@ -17,6 +17,10 @@ import 'mesh_ui.dart';
 /// 互联: this phone's view of the Mesh. It talks to the local engine's
 /// `/.dsh-mesh/v1` routes with the same authenticated [DshConnection] as the
 /// rest of the app; the plugin does the peer work.
+///
+/// Joining follows the desktop settings page: flip the switch, the system
+/// browser opens the account server, the user approves this phone there, and
+/// this page polls until the plugin has the credentials.
 class MeshPage extends ConsumerStatefulWidget {
   const MeshPage({super.key});
 
@@ -27,7 +31,10 @@ class MeshPage extends ConsumerStatefulWidget {
 }
 
 class _MeshPageState extends ConsumerState<MeshPage> {
-  final _pairing = TextEditingController();
+  /// How often the page re-checks a link the browser is holding.
+  static const _linkPollInterval = Duration(seconds: 2);
+
+  final _server = TextEditingController();
   final _expanded = <String>{};
   MeshStatus? _status;
   MeshTree? _tree;
@@ -35,7 +42,12 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   bool _pairingBusy = false;
   String? _error;
   Timer? _poll;
+  Timer? _linkPoll;
   int _load = 0;
+
+  /// The browser hand-off in flight, if any.
+  MeshLinkStart? _link;
+  bool _serverTouched = false;
 
   @override
   void initState() {
@@ -49,7 +61,8 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   @override
   void dispose() {
     _poll?.cancel();
-    _pairing.dispose();
+    _linkPoll?.cancel();
+    _server.dispose();
     super.dispose();
   }
 
@@ -75,19 +88,28 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     }
     try {
       final status = await api.status();
-      final tree = await api.tree();
+      final tree = status.paired ? await api.tree() : const MeshTree(nodes: [], cursor: 0);
       if (!mounted || token != _load) return;
       setState(() {
         _status = status;
         _tree = tree;
         _loading = false;
-        _error = null;
+        // A quiet poll must not wipe the message from the last action: the
+        // user would see their failed tap as "nothing happened".
+        if (!quiet) _error = null;
+        // Offer the deployment's server until the user types their own, but
+        // never overwrite an address they are already editing.
+        if (!_serverTouched && _server.text.trim().isEmpty && status.defaultServer.isNotEmpty) {
+          _server.text = status.defaultServer;
+        }
       });
     } catch (error) {
       if (!mounted || token != _load) return;
       setState(() {
         _loading = false;
-        _error = _errorText(error);
+        // A background poll failing is not the user's action; keep quiet about
+        // it while the page already shows what they did.
+        if (!quiet || _status == null) _error = _errorText(error);
       });
     }
   }
@@ -100,15 +122,24 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     return error.toString();
   }
 
-  Future<void> _pair([String? value]) async {
-    final text = (value ?? _pairing.text).trim();
-    if (text.isEmpty) {
-      setState(() => _error = context.l10n.meshPairingEmpty);
-      return;
-    }
+  /// The address the switch links against: what the user typed, or the one the
+  /// deployment bundled when the field is untouched.
+  String get _targetServer {
+    final typed = _server.text.trim();
+    return typed.isEmpty ? (_status?.defaultServer ?? '') : typed;
+  }
+
+  /// Flip the switch on: create the link, open the browser, then poll for the
+  /// approval. Nothing here blocks on the browser.
+  Future<void> _join() async {
     final api = ref.read(meshApiProvider);
     if (api == null) {
       setState(() => _error = context.l10n.meshEngineOff);
+      return;
+    }
+    final target = _targetServer;
+    if (target.isEmpty) {
+      setState(() => _error = context.l10n.meshServerRequired);
       return;
     }
     setState(() {
@@ -116,23 +147,71 @@ class _MeshPageState extends ConsumerState<MeshPage> {
       _error = null;
     });
     try {
-      await api.pair(text);
+      final started = await api.startLink(target);
       if (!mounted) return;
-      _pairing.clear();
-      await _refresh();
+      if (started.approvalUrl.isEmpty) {
+        throw const MeshApiException(0, 'link_failed', '');
+      }
+      setState(() => _link = started);
+      final opened = await launchUrl(
+        Uri.parse(started.approvalUrl),
+        mode: LaunchMode.externalApplication,
+      ).catchError((_) => false);
+      if (!mounted) return;
+      if (!opened) {
+        // The card keeps the URL visible so it can be copied by hand.
+        setState(() => _error = context.l10n.meshLinkOpenFailed);
+      }
+      _startLinkPolling();
     } catch (error) {
-      if (mounted) setState(() => _error = _errorText(error));
+      if (mounted) {
+        setState(() {
+          _link = null;
+          _error = _errorText(error);
+        });
+      }
     } finally {
       if (mounted) setState(() => _pairingBusy = false);
     }
   }
 
-  Future<void> _scan() async {
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(builder: (_) => const _MeshScanPage()),
-    );
-    if (!mounted || code == null || code.trim().isEmpty) return;
-    await _pair(code);
+  /// Ask the browser approval question every couple of seconds. Polling beats
+  /// one long request here: Android suspends the app while the browser is in
+  /// front, and the plugin keeps the pending link across that gap.
+  void _startLinkPolling() {
+    _linkPoll?.cancel();
+    _linkPoll = Timer.periodic(_linkPollInterval, (_) => unawaited(_pollLink()));
+  }
+
+  Future<void> _pollLink() async {
+    final api = ref.read(meshApiProvider);
+    if (api == null || _link == null) return;
+    try {
+      final result = await api.pollLink();
+      if (!mounted) return;
+      if (result.pending) return;
+      _linkPoll?.cancel();
+      setState(() {
+        _link = null;
+        _status = result.status ?? _status;
+      });
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      _linkPoll?.cancel();
+      setState(() {
+        _link = null;
+        _error = _errorText(error);
+      });
+    }
+  }
+
+  /// Flip the switch off while the browser is still open.
+  Future<void> _cancelLink() async {
+    _linkPoll?.cancel();
+    final api = ref.read(meshApiProvider);
+    setState(() => _link = null);
+    await api?.cancelLink().catchError((_) {});
   }
 
   Future<void> _unpair() async {
@@ -248,48 +327,107 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     ),
   );
 
-  Widget _joinCard(L10n l10n) => SettingsSection(
-    title: l10n.meshJoinTitle,
-    footer: Text(l10n.meshJoinHint),
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: TextField(
-          controller: _pairing,
-          minLines: 1,
-          maxLines: 3,
-          enabled: !_pairingBusy,
-          keyboardType: TextInputType.visiblePassword,
-          decoration: InputDecoration(
-            labelText: l10n.meshPairingLabel,
-            hintText: l10n.meshJoinHint,
-            border: const OutlineInputBorder(),
-          ),
+  Widget _joinCard(L10n l10n) {
+    final linking = _link != null;
+    final defaultServer = _status?.defaultServer ?? '';
+    return SettingsSection(
+      title: l10n.meshJoinTitle,
+      footer: Text(l10n.meshJoinHint),
+      children: [
+        SettingsSwitchTile(
+          icon: AppIcons.link,
+          title: l10n.meshConnectToggle,
+          subtitle: linking
+              ? l10n.meshWaitingApproval
+              : l10n.meshConnectToggleHint,
+          value: linking,
+          onChanged: _pairingBusy
+              ? null
+              : (next) => unawaited(next ? _join() : _cancelLink()),
         ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: FilledButton(
-                onPressed: _pairingBusy ? null : () => unawaited(_pair()),
-                child: _pairingBusy
-                    ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text(l10n.meshConnect),
+        if (_pairingBusy && !linking)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 12),
+                Text(l10n.meshOpeningBrowser, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        if (defaultServer.isNotEmpty && !linking)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                l10n.meshServerDefaultHint(defaultServer),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: _pairingBusy ? null : () => unawaited(_scan()),
-              icon: const Icon(AppIcons.qrCode, size: 18),
-              label: Text(l10n.meshScan),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+          child: TextField(
+            controller: _server,
+            enabled: !_pairingBusy && !linking,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: InputDecoration(
+              labelText: l10n.meshServerAddress,
+              hintText: l10n.meshServerAddressPlaceholder,
+              border: const OutlineInputBorder(),
             ),
-          ],
+            onChanged: (_) => setState(() => _serverTouched = true),
+          ),
         ),
-      ),
-    ],
-  );
+        if (linking) ...[
+          if (_link!.approvalUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                l10n.meshApprovalFallback,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          if (_link!.approvalUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SelectableText(
+                _link!.approvalUrl,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => unawaited(_reopenBrowser()),
+                    icon: const Icon(AppIcons.openExternal, size: 18),
+                    label: Text(l10n.meshOpenBrowserAgain),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _reopenBrowser() async {
+    final url = _link?.approvalUrl ?? '';
+    if (url.isEmpty) return;
+    final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
+        .catchError((_) => false);
+    if (!opened && mounted) setState(() => _error = context.l10n.meshLinkOpenFailed);
+  }
 
   Widget _header(L10n l10n, MeshStatus status) => OverviewCard(
     leading: const OverviewGlyph(AppIcons.remoteHost, tint: 4),
@@ -476,33 +614,6 @@ class _RenameDialogState extends State<_RenameDialog> {
           child: Text(l10n.commonSave),
         ),
       ],
-    );
-  }
-}
-
-class _MeshScanPage extends ConsumerStatefulWidget {
-  const _MeshScanPage();
-
-  @override
-  ConsumerState<_MeshScanPage> createState() => _MeshScanPageState();
-}
-
-class _MeshScanPageState extends ConsumerState<_MeshScanPage> {
-  bool _done = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.meshScanTitle)),
-      body: ref.watch(pairingScannerProvider)(
-        context,
-        (code) {
-          if (_done || !mounted) return;
-          _done = true;
-          Navigator.of(context).pop(code);
-        },
-      ),
     );
   }
 }

@@ -10188,7 +10188,8 @@ class L10nEn extends L10n {
   String get meshSubtitle => 'Join this phone to multiple devices';
 
   @override
-  String get meshIntro => 'Once joined, this phone can view, prompt, and stop task sessions on other devices.';
+  String get meshIntro =>
+      'Once joined, this phone can view, prompt, and stop task sessions on other devices, and they can send work to it.';
 
   @override
   String get meshEngineOff => 'The local engine is not running. Start it before using Interconnect.';
@@ -10197,7 +10198,8 @@ class L10nEn extends L10n {
   String get meshJoinTitle => 'Join Interconnect';
 
   @override
-  String get meshJoinHint => 'Paste the pairing string from a computer, or scan the QR code on the admin page.';
+  String get meshJoinHint =>
+      'Turn the switch on and the browser opens the approval page. Sign in with your email and approve to join.';
 
   @override
   String get meshPairingLabel => 'Pairing string';
@@ -10310,6 +10312,38 @@ class L10nEn extends L10n {
 
   @override
   String get meshRequestFailed => 'Request failed';
+
+  @override
+  String get meshConnectToggle => 'Join Interconnect';
+
+  @override
+  String get meshConnectToggleHint => 'Turn on, then sign in and approve this phone in the browser.';
+
+  @override
+  String get meshServerAddress => 'Server address';
+
+  @override
+  String get meshServerAddressPlaceholder => 'https://mesh.example.com';
+
+  @override
+  String get meshServerRequired => 'Enter the server address first.';
+
+  @override
+  String get meshOpeningBrowser => 'Opening the browser…';
+
+  @override
+  String get meshOpenBrowserAgain => 'Open the browser again';
+
+  @override
+  String get meshApprovalFallback => 'If the browser does not open, copy this address into one:';
+
+  @override
+  String get meshLinkOpenFailed => 'The browser could not be opened. Copy the address below and open it manually.';
+
+  @override
+  String meshServerDefaultHint(String server) {
+    return 'Default server: $server (you can use another address)';
+  }
 
   @override
   String get nearbyThisChat => 'This chat';

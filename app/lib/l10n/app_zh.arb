@@ -5939,10 +5939,10 @@
   },
   "meshTitle": "互联",
   "meshSubtitle": "手机加入多设备互联",
-  "meshIntro": "加入后可以在这台手机上查看、输入和停止其他设备的任务会话。",
+  "meshIntro": "加入后可以在这台手机上查看、输入和停止其他设备的任务会话，也能让别人把任务派到这台手机。",
   "meshEngineOff": "本机引擎未运行，先启动引擎再使用互联。",
   "meshJoinTitle": "加入互联",
-  "meshJoinHint": "粘贴电脑上的配对串，或扫描管理页的二维码。",
+  "meshJoinHint": "打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。",
   "meshPairingLabel": "配对串",
   "meshPairingEmpty": "请先粘贴配对串。",
   "meshConnect": "连接",
@@ -5996,6 +5996,23 @@
   "meshStopped": "已停止这一轮",
   "meshReadOnlyHint": "这个会话只能查看；只有任务会话可以输入。",
   "meshRequestFailed": "请求失败",
+  "meshConnectToggle": "加入互联",
+  "meshConnectToggleHint": "打开后用浏览器登录并授权这台手机。",
+  "meshServerAddress": "服务器地址",
+  "meshServerAddressPlaceholder": "https://mesh.example.com",
+  "meshServerRequired": "请先填写服务器地址。",
+  "meshOpeningBrowser": "正在打开浏览器…",
+  "meshOpenBrowserAgain": "再次打开浏览器",
+  "meshApprovalFallback": "如果浏览器没有自动打开，复制下面的地址在浏览器中打开：",
+  "meshLinkOpenFailed": "打不开浏览器，请复制下面的地址手动打开。",
+  "meshServerDefaultHint": "默认服务器：{server}（可直接改用其他地址）",
+  "@meshServerDefaultHint": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
   "nearbyThisChat": "本对话",
   "nearbyPermissionTitle": "本对话的权限",
   "nearbyNewChatDefault": "新对话默认：{name}",

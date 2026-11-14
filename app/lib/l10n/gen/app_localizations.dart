@@ -17861,7 +17861,7 @@ abstract class L10n {
   /// No description provided for @meshIntro.
   ///
   /// In zh, this message translates to:
-  /// **'加入后可以在这台手机上查看、输入和停止其他设备的任务会话。'**
+  /// **'加入后可以在这台手机上查看、输入和停止其他设备的任务会话，也能让别人把任务派到这台手机。'**
   String get meshIntro;
 
   /// No description provided for @meshEngineOff.
@@ -17879,7 +17879,7 @@ abstract class L10n {
   /// No description provided for @meshJoinHint.
   ///
   /// In zh, this message translates to:
-  /// **'粘贴电脑上的配对串，或扫描管理页的二维码。'**
+  /// **'打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。'**
   String get meshJoinHint;
 
   /// No description provided for @meshPairingLabel.
@@ -18097,6 +18097,66 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'请求失败'**
   String get meshRequestFailed;
+
+  /// No description provided for @meshConnectToggle.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入互联'**
+  String get meshConnectToggle;
+
+  /// No description provided for @meshConnectToggleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开后用浏览器登录并授权这台手机。'**
+  String get meshConnectToggleHint;
+
+  /// No description provided for @meshServerAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器地址'**
+  String get meshServerAddress;
+
+  /// No description provided for @meshServerAddressPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'https://mesh.example.com'**
+  String get meshServerAddressPlaceholder;
+
+  /// No description provided for @meshServerRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写服务器地址。'**
+  String get meshServerRequired;
+
+  /// No description provided for @meshOpeningBrowser.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在打开浏览器…'**
+  String get meshOpeningBrowser;
+
+  /// No description provided for @meshOpenBrowserAgain.
+  ///
+  /// In zh, this message translates to:
+  /// **'再次打开浏览器'**
+  String get meshOpenBrowserAgain;
+
+  /// No description provided for @meshApprovalFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'如果浏览器没有自动打开，复制下面的地址在浏览器中打开：'**
+  String get meshApprovalFallback;
+
+  /// No description provided for @meshLinkOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'打不开浏览器，请复制下面的地址手动打开。'**
+  String get meshLinkOpenFailed;
+
+  /// No description provided for @meshServerDefaultHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认服务器：{server}（可直接改用其他地址）'**
+  String meshServerDefaultHint(String server);
 
   /// No description provided for @nearbyThisChat.
   ///

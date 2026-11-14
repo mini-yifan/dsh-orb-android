@@ -1,10 +1,10 @@
 {
   "meshTitle": "Interconnect",
   "meshSubtitle": "Join this phone to multiple devices",
-  "meshIntro": "Once joined, this phone can view, prompt, and stop task sessions on other devices.",
+  "meshIntro": "Once joined, this phone can view, prompt, and stop task sessions on other devices, and they can send work to it.",
   "meshEngineOff": "The local engine is not running. Start it before using Interconnect.",
   "meshJoinTitle": "Join Interconnect",
-  "meshJoinHint": "Paste the pairing string from a computer, or scan the QR code on the admin page.",
+  "meshJoinHint": "Turn the switch on and the browser opens the approval page. Sign in with your email and approve to join.",
   "meshPairingLabel": "Pairing string",
   "meshPairingEmpty": "Paste a pairing string first.",
   "meshConnect": "Connect",
@@ -57,5 +57,22 @@
   "meshSending": "Sending…",
   "meshStopped": "Stopped this turn",
   "meshReadOnlyHint": "This session is view-only; only task sessions accept commands.",
-  "meshRequestFailed": "Request failed"
+  "meshRequestFailed": "Request failed",
+  "meshConnectToggle": "Join Interconnect",
+  "meshConnectToggleHint": "Turn on, then sign in and approve this phone in the browser.",
+  "meshServerAddress": "Server address",
+  "meshServerAddressPlaceholder": "https://mesh.example.com",
+  "meshServerRequired": "Enter the server address first.",
+  "meshOpeningBrowser": "Opening the browser…",
+  "meshOpenBrowserAgain": "Open the browser again",
+  "meshApprovalFallback": "If the browser does not open, copy this address into one:",
+  "meshLinkOpenFailed": "The browser could not be opened. Copy the address below and open it manually.",
+  "meshServerDefaultHint": "Default server: {server} (you can use another address)",
+  "@meshServerDefaultHint": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  }
 }
