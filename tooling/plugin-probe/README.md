@@ -91,20 +91,30 @@ runtime/test-host.sh
 
 ## 换成真实的 `@dsh-mesh/plugin`
 
-在 `dsh-mesh` 仓库生成自包含 tgz（`bundle/*.mjs` + `package.json` + `cordis.patch.yml` + `dsh-plugin.json`，可复现）：
+`dsh-mesh` 已经把自包含 tgz（`bundle/*.mjs` + `package.json` + `cordis.patch.yml` + `dsh-plugin.json`）
+**入库**到 `packages/mesh-plugin/dist-phone/`，直接取用即可，不必先在本地打包：
 
 ```sh
 cd ../dsh-mesh
+ls packages/mesh-plugin/dist-phone/
+# dsh-mesh-plugin-0.1.1.tgz
+shasum -a 256 packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.1.tgz
+```
+
+只有改了 mesh 代码才需要重新打包。`pack-phone.py` 可复现：同一 `bundle/` 两次输出字节相同，
+所以 sha256 可以钉住。
+
+```sh
 python3 packages/mesh-plugin/scripts/pack-phone.py
-# -> packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.0.tgz
+# -> packages/mesh-plugin/dist-phone/dsh-mesh-plugin-<version>.tgz
 ```
 
 然后用这个 tarball 构建手机运行时：
 
 ```sh
 DSH_PLUGIN_NAME='@dsh-mesh/plugin' \
-DSH_PLUGIN_VERSION='0.1.0' \
-DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.0.tgz' \
+DSH_PLUGIN_VERSION='0.1.1' \
+DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.1.tgz' \
 DSH_PLUGIN_ENTRY='lib/index.mjs' \
 DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}' \
 bash runtime/build-runtime.sh arm64-v8a
