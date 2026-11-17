@@ -103,41 +103,94 @@ overlay 应包含：
 
 ### 2.3 重打 rootfs
 
-在临时目录准备一个 Python 脚本，逐成员重写 `tar.xz`：
+用 `runtime/lib/repack-rootfs.py`（不要临时现写，历史上两次现写都踩了同样的坑）：
 
+```sh
+cd dsh-orb-android
+
+NEW_VERSION="r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.1-37e1b2adf293-presets5"
+
+python3 -I runtime/lib/repack-rootfs.py \
+  --rootfs runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz \
+  --plugin-dir /tmp/plugpkg/package \
+  --overlay runtime/.work/plugin-check/dsh-web.patch.yml \
+  --version "$NEW_VERSION" \
+  --manifest runtime/out/arm64-v8a/assets/runtime/manifest.json \
+  --plugin-name '@dsh-mesh/plugin' --plugin-version 0.1.1 \
+  --plugin-sha256 <tgz 的 sha256> \
+  --rootfs-path '/opt/dsh-go/plugins/@dsh-mesh/plugin' \
+  --config '{"platform":"android","incomingPreset":"phone-background"}'
+```
+
+脚本做的事：
+
+- 替换整个 `opt/dsh-go/plugins/@dsh-mesh/plugin/`（旧版的 chunk 文件必须一并消失，否则
+  `index.mjs` 会 import 不存在的模块）；
 - 替换 `etc/dsh-app/dsh-web.patch.yml`；
-- 更新 `etc/dsh-app/runtime.json` 的 `runtimeVersion`；
-- 需要时追加 `opt/dsh-go/dsh-go-bridge/lib/background-agent.js`；
-- 需要时追加软链 `opt/dsh-go/node_modules -> ../dsh/node_modules`；
+- 更新 `etc/dsh-app/runtime.json` 的 `runtimeVersion`（必须和外层 manifest 完全一致，
+  否则 App 的兼容性检查会拒绝升级）；
 - 其余成员保持原顺序、mtime、uid/gid、mode；
-- 用 `lzma` 或 `xz` 重新压缩；
-- 同时计算新的 `rootfsSha256`、`rootfsBytes`、`tarSha256`、`tarBytes`、`uncompressedBytes`、`entries`。
+- 写回 `manifest.json` 的 `runtimeVersion` / `rootfsSha256` / `rootfsBytes` /
+  `tarSha256` / `tarBytes` / `uncompressedBytes` / `entries` / `dshPlugins`。
+
+**两个必须知道的约束**（脚本已处理，改动时不要破坏）：
+
+1. **不能先解包到磁盘**。rootfs 的 `opt/python/share/terminfo` 里有解析到自身的符号链接
+   环，`tarfile.extract()` 会直接 ELOOP 失败。
+2. **tar.xz 流只能读一次**。`tarfile` 在 xz 上单遍读取，一旦为取 `runtime.json` 调了
+   `getmember()`，后续 `for member in archive` 只会悄悄产出几百个成员——归档看着"成功"，
+   实际丢了 99% 的内容。脚本因此用独立句柄读 `runtime.json`。
 
 版本号约定：
 
 ```text
-r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.0-<inputs>-presetsN
+r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.1-<inputs>-presetsN
 ```
 
-每改一次 overlay 就递增 `presetsN`，App 才会触发 runtime 升级。
+`mesh<版本>` 跟插件 tgz 的 `package.json.version`；每改一次 overlay 就递增 `presetsN`，
+App 才会触发 runtime 升级。
 
-### 2.4 更新 manifest
+单次重打包约 6 分钟（33800 个成员、800 MB 未压缩）。同一份输入跑两次产出字节一致的
+`tar.xz`，便于核对。
 
-把新值写回：
+### 2.4 校验重打结果
 
-```text
-runtime/out/arm64-v8a/assets/runtime/manifest.json
+脚本已写回 manifest，但仍应确认归档内容（目录项数量应与原归档一致）：
+
+```sh
+python3 - <<'EOF'
+import tarfile
+with tarfile.open('runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz','r:xz') as t:
+    n = 0
+    plugin = []
+    rt = None
+    for m in t:
+        n += 1
+        if 'dsh-mesh/plugin' in m.name: plugin.append(m.name)
+        if m.name == 'etc/dsh-app/runtime.json':
+            import json; rt = json.loads(t.extractfile(m).read())
+    print('members:', n)                 # 应与原归档同一量级（约 33800）
+    print('plugin entries:', len(plugin)) # 应为 9（目录 2 + 文件 7）
+    print('runtime.json version:', rt['runtimeVersion'])
+EOF
 ```
 
-字段：
+再确认插件真的带着修复（不是又一次打进旧包）：
 
-- `runtimeVersion`
-- `rootfsSha256`
-- `rootfsBytes`
-- `tarSha256`
-- `tarBytes`
-- `uncompressedBytes`
-- `entries`
+```sh
+python3 - <<'EOF'
+import tarfile
+with tarfile.open('runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz','r:xz') as t:
+    for m in t:
+        if m.name.endswith('dsh-mesh/plugin/lib/index.mjs'):
+            s = t.extractfile(m).read().decode()
+            for label, pat in [('host reconnect', 'initialDelayMs: 4e3'),
+                               ('empty fp guard', 'trim() === ""'),
+                               ('host watchdog', 'hostNudgedAt')]:
+                print('OK  ' if pat in s else 'MISS', label)
+            break
+EOF
+```
 
 并把新 `rootfs-arm64-v8a.tar.xz` 复制到同一目录。
 
