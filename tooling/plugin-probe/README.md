@@ -97,8 +97,8 @@ runtime/test-host.sh
 ```sh
 cd ../dsh-mesh
 ls packages/mesh-plugin/dist-phone/
-# dsh-mesh-plugin-0.1.1.tgz
-shasum -a 256 packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.1.tgz
+# dsh-mesh-plugin-0.1.3.tgz
+shasum -a 256 packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.3.tgz
 ```
 
 只有改了 mesh 代码才需要重新打包。`pack-phone.py` 可复现：同一 `bundle/` 两次输出字节相同，
@@ -113,8 +113,8 @@ python3 packages/mesh-plugin/scripts/pack-phone.py
 
 ```sh
 DSH_PLUGIN_NAME='@dsh-mesh/plugin' \
-DSH_PLUGIN_VERSION='0.1.1' \
-DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.1.tgz' \
+DSH_PLUGIN_VERSION='0.1.3' \
+DSH_PLUGIN_URL='file:///absolute/path/dsh-mesh-plugin-0.1.3.tgz' \
 DSH_PLUGIN_ENTRY='lib/index.mjs' \
 DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}' \
 bash runtime/build-runtime.sh arm64-v8a

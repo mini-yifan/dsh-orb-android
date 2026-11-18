@@ -108,7 +108,7 @@ overlay 应包含：
 ```sh
 cd dsh-orb-android
 
-NEW_VERSION="r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.1-37e1b2adf293-presets5"
+NEW_VERSION="r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.3-92f7469a7a7c-presets7"
 
 python3 -I runtime/lib/repack-rootfs.py \
   --rootfs runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz \
@@ -116,7 +116,7 @@ python3 -I runtime/lib/repack-rootfs.py \
   --overlay runtime/.work/plugin-check/dsh-web.patch.yml \
   --version "$NEW_VERSION" \
   --manifest runtime/out/arm64-v8a/assets/runtime/manifest.json \
-  --plugin-name '@dsh-mesh/plugin' --plugin-version 0.1.1 \
+  --plugin-name '@dsh-mesh/plugin' --plugin-version 0.1.3 \
   --plugin-sha256 <tgz 的 sha256> \
   --rootfs-path '/opt/dsh-go/plugins/@dsh-mesh/plugin' \
   --config '{"platform":"android","incomingPreset":"phone-background"}'
@@ -144,7 +144,7 @@ python3 -I runtime/lib/repack-rootfs.py \
 版本号约定：
 
 ```text
-r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.1-<inputs>-presetsN
+r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.3-<inputs>-presetsN
 ```
 
 `mesh<版本>` 跟插件 tgz 的 `package.json.version`；每改一次 overlay 就递增 `presetsN`，
