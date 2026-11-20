@@ -1,22 +1,42 @@
 # 手机真机测试手册
 
 > 适用仓库：`dsh-orb-android`
-> 记录时间：2026-11-13
-> 最近验证：runtime `r15-dsh0.2.2-rc.1-...-presets4`，分支 `feat/mesh-runtime`，提交 `a53d51f`
+> 更新时间：2026-11-20（对齐 DSH Orb 0.1.2 / mesh 插件 0.1.6）
+> 最近验证：runtime `r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.6-...-presets9`，分支 `feat/mesh-runtime`
 >
-> 目标：在真机上验证 DSH runtime、`orb-phone` / `phone-background` preset、悬浮球发送截图，以及手机与 Mac/Windows 的 Mesh 互联。
+> 目标：在真机上验证 DSH runtime、`orb-phone` / `phone-background` preset、悬浮球发送截图，以及手机与 Mac/Windows 的互联（会话续聊、新建会话、`device_agent` 派任务）。
+
+> **与旧版文档的差异（2026-11-20 起）**：App 已独立为 DSH Orb，包名 `top.dshorb.app`（不再是 `io.github.ccch1mneyyy.dsh_app`），只有**一个**包，不再用 `.mesh` 测试包与 debug 签名。测试包的说法在本文件里保留在「历史做法」小节，仅作参考。
 
 ## 0. 速查清单
 
+**装机**
+
 - [ ] `adb devices` 能看到手机，状态为 `device`
-- [ ] 测试包使用独立 `applicationId`，不覆盖原 DSH Go
-- [ ] 新 runtime 已打进 APK，安装后 `rootfs.version` 变成目标版本
-- [ ] 新聊天里能看到「悬浮球」「后台模式」，且可点击
-- [ ] 悬浮球「问一句」发送后，模型能描述当前屏幕
-- [ ] Mac → 手机 `device_agent` 任务完成，文件回到 Mac 的 `.mesh-in/<taskId>/`
-- [ ] 手机 → Mac/Windows `device_agent` 派发后本轮结束，完成通知随后到达，不 `sleep` 轮询
+- [ ] APK 的 `versionName` 是本轮目标版本，`versionCode` 比手机上已装的大
+- [ ] APK 签名与已装版本一致（否则 `install -r` 会报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`）
+- [ ] 新 runtime 已打进 APK：`unzip -p <apk> assets/runtime/manifest.json` 的 `runtimeVersion` 是目标值
+- [ ] 安装并启动后，「设置 → 关于」显示新版本号
+- [ ] 本地引擎（本机 → 运行中）起来了，`libproot.so` 与 `node` 进程存在
+
+**互联（三端在线）**
+
+- [ ] 互联页显示 Mac、Windows 均「在线」，顶部计数正确
+- [ ] 展开某台电脑，工作区标题行右侧有「＋」，点它能新建会话并进入
+- [ ] 点工作区标题能折叠/展开会话列表；切换设备时折叠状态复位
+- [ ] 打开一个**普通**（非任务）远端会话，输入框可用，发一条消息能收到回复
+
+**跨设备派任务**
+
+- [ ] 电脑 → 手机：`device_agent_devices` 能列出这台手机及其工作区
+- [ ] 电脑 → 手机：`device_agent` 派任务成功，文件回到电脑的 `.mesh-in/<taskId>/`
+- [ ] 手机 → 电脑：`device_agent` 派发后本轮结束，完成通知随后到达，不 `sleep` 轮询
+- [ ] 失败时（设备离线／无工作区）能看到具体原因，而不是只说「没发出去」
+
+**收尾**
+
 - [ ] 日志里没有 preset/plugin 加载失败
-- [ ] 测完恢复原 DSH Go 与无障碍服务
+- [ ] 测完恢复无障碍服务与原来的 App 状态
 
 ## 1. 设备与环境
 
@@ -44,71 +64,70 @@ export PATH=$HOME/development/platform-tools:$PATH
 - Flutter 3.47.9，JDK 17，Android SDK 36 / NDK 28。
 - 构建 APK 时显式传 `JAVA_HOME`、`ANDROID_HOME`。
 
-### 1.3 测试包隔离
+### 1.3 用哪个包（2026-11-20 起）
 
-- 原 App：`io.github.ccch1mneyyy.dsh_app`，release 签名，数据不要动。
-- 测试包：`io.github.ccch1mneyyy.dsh_app.mesh`，debug 签名，单独安装。
-- 构建测试 APK 前临时把 `app/android/app/build.gradle.kts` 的 `applicationId` 改成 `.mesh`，**构建完成后改回**。
-- `adb install -r` 保留测试包自己的 `/data`、runtime 和 Mesh 配对状态。
+现在只有**一个** App：`top.dshorb.app`，release 签名。以前那套「`.mesh` 测试包 + debug 签名、与原 DSH Go 并存」的做法已废弃——原因是 DSH Orb 已经与上游 dsh-go 分家，没有需要并存的「原 App」。
 
-### 1.4 无障碍冲突
+```sh
+export DSH_APP=top.dshorb.app       # 正式包
+export DSH_DEV=top.dshorb.app.dev   # -PtestAppId=true 的并排开发包，仅在需要并存时用
+```
 
-两个 App 的 `PhoneA11yService` 会互相把对方挤出 `enabled_accessibility_services`。测测试包时：
+`adb install -r` 会保留 `/data`、runtime 与互联配对状态。**前提是签名一致**：手机上装的是 debug key 签名、新包是 release key 时会被拒（见 `docs/release.md`「签名」里的坑）。
 
-1. 在系统设置里只启用测试包的无障碍服务；
-2. 把原 DSH Go force-stop（只停进程，不删数据），否则它的 keeper 会把服务列表改回去；
-3. 测完恢复原 App 并重新启用它的无障碍。
+### 1.4 历史做法：`.mesh` 测试包（已废弃，仅供理解旧记录）
+
+早期为把 DSH Orb 与上游 dsh-go 并存，曾用 `io.github.ccch1mneyyy.dsh_app.mesh` 这个独立包名 + debug 签名，并靠临时改 `build.gradle.kts` 的 `applicationId` 打出来。本文件里凡是提到 `.mesh`、`io.github.ccch1mneyyy.dsh_app`、`run-as` 的地方，都属于那个时期；现在应把包名换成 `top.dshorb.app`，且 release 包**不能 `run-as`**（不可调试），读 runtime 版本要改用别的方法（见 2.6）。
+
+### 1.5 无障碍服务
+
+只有一个 App，不再有「两个 App 互相把对方挤出 `enabled_accessibility_services`」的问题。仍需注意：
+
+1. 首次安装后要在系统设置里手动启用「DSH 手机操控」无障碍服务；
+2. 部分 ROM 需要额外允许「受限设置」才能开启；
+3. 卸载重装后要重新启用。
 
 `adb shell settings put secure ...` 不可用（shell 没有 `WRITE_SECURE_SETTINGS`），必须走系统设置 UI。
 
-## 2. 测试包与 runtime 构建
+## 2. runtime 与 APK 构建
 
-### 2.1 为什么在 Mac 上是“改包”而不是从零构建
+### 2.1 什么时候需要重打 runtime
 
-完整的 `runtime/build-runtime.sh` 需要 Linux x86_64 构建机。Mac 上的流程是：
+`runtime/out/` 里是 Linux rootfs（PRoot + Node + DSH + 桥接 + mesh 插件），**被 `runtime/.gitignore` 忽略、不入库**。只有下列情况才需要重跑 `runtime/build-runtime.sh`：
 
-1. 复用已有 arm64 rootfs；
-2. 重新生成 overlay；
-3. 替换 rootfs 里的 overlay 和 `runtime.json`；
-4. 重打 `tar.xz`、更新 manifest；
-5. 用 Flutter 构建测试 APK。
+| 变了什么 | 要重打 runtime？ |
+|---|---|
+| Dart / Kotlin 代码、UI、l10n | 不要 |
+| `runtime/bridge/dsh-go-bridge/`（preset、绑定的工具） | 要 |
+| mesh 插件 tgz 版本 | 要（插件版本计入 `runtimeVersion`） |
+| DSH / Node 版本、`runtime/patches/*.diff` | 要 |
 
-生产构建仍应在 Linux 构建机上跑完整脚本。
+日常改 UI 只跑 `tooling/build-apk.sh` 就够了，它会直接用现有的 `runtime/out/`。
 
-### 2.2 生成 overlay
+### 2.2 重打 runtime（需要时）
 
-用真实 Mesh 插件 tgz 跑插件检查，生成与 `assemble` 相同的 overlay：
+本机是 Mac、要产出 arm64 rootfs，做法是「改包」而不是从零构建——完整的 `build-runtime.sh` 需要 x86_64 Linux 主机。
 
 ```sh
 cd dsh-orb-android
 
+MESH_TGZ=../dsh-mesh/packages/mesh-plugin/dist-phone/dsh-mesh-plugin-0.1.6.tgz
+MESH_SHA=$(shasum -a 256 "$MESH_TGZ" | cut -d' ' -f1)
+
+# tgz 先解到临时目录，repack 的 --plugin-dir 指向 package/
+rm -rf /tmp/plugpkg && mkdir -p /tmp/plugpkg && tar -xzf "$MESH_TGZ" -C /tmp/plugpkg
+
+# 1) 生成 overlay（产物：runtime/.work/plugin-check/dsh-web.patch.yml）
 RUNTIME_PLUGIN_CHECK=1 \
 DSH_PLUGIN_NAME='@dsh-mesh/plugin' \
-DSH_PLUGIN_VERSION='0.1.0' \
+DSH_PLUGIN_VERSION='0.1.6' \
 DSH_PLUGIN_URL="file://$MESH_TGZ" \
 DSH_PLUGIN_ENTRY='lib/index.mjs' \
-DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background"}' \
+DSH_PLUGIN_CONFIG='{"platform":"android","incomingPreset":"phone-background","defaultServer":"https://dshorb.top"}' \
 bash runtime/build-runtime.sh arm64-v8a
-```
 
-产物：`runtime/.work/plugin-check/dsh-web.patch.yml`。
-
-overlay 应包含：
-
-- `preset-orb-phone`：悬浮球 preset；
-- `preset-phone-background`：后台模式 preset（仅打包 Mesh 插件时出现）；
-- `tool-device-agent`：派给已互联电脑；
-- `tool-background-agent`：派给手机本机后台；
-- `<mesh plugin>` 的绝对路径行。
-
-### 2.3 重打 rootfs
-
-用 `runtime/lib/repack-rootfs.py`（不要临时现写，历史上两次现写都踩了同样的坑）：
-
-```sh
-cd dsh-orb-android
-
-NEW_VERSION="r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.3-92f7469a7a7c-presets7"
+# 2) 重打 rootfs（用仓库脚本，不要现写——历史上两次现写都踩了同样的坑）
+NEW_VERSION="r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.6-${MESH_SHA:0:12}-presets9"
 
 python3 -I runtime/lib/repack-rootfs.py \
   --rootfs runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz \
@@ -116,143 +135,85 @@ python3 -I runtime/lib/repack-rootfs.py \
   --overlay runtime/.work/plugin-check/dsh-web.patch.yml \
   --version "$NEW_VERSION" \
   --manifest runtime/out/arm64-v8a/assets/runtime/manifest.json \
-  --plugin-name '@dsh-mesh/plugin' --plugin-version 0.1.3 \
-  --plugin-sha256 <tgz 的 sha256> \
+  --plugin-name '@dsh-mesh/plugin' --plugin-version 0.1.6 \
+  --plugin-sha256 "$MESH_SHA" \
   --rootfs-path '/opt/dsh-go/plugins/@dsh-mesh/plugin' \
-  --config '{"platform":"android","incomingPreset":"phone-background"}'
+  --config '{"platform":"android","incomingPreset":"phone-background","defaultServer":"https://dshorb.top"}'
 ```
 
-脚本做的事：
+版本号约定：`r15-dsh<DSH版本>-node<Node版本>-<发行版>-mesh<插件版本>-<sha前12>-presets<N>`。**每改一次 overlay 就递增 `presetsN`**，否则 App 不会触发 runtime 升级。
 
-- 替换整个 `opt/dsh-go/plugins/@dsh-mesh/plugin/`（旧版的 chunk 文件必须一并消失，否则
-  `index.mjs` 会 import 不存在的模块）；
-- 替换 `etc/dsh-app/dsh-web.patch.yml`；
-- 更新 `etc/dsh-app/runtime.json` 的 `runtimeVersion`（必须和外层 manifest 完全一致，
-  否则 App 的兼容性检查会拒绝升级）；
-- 其余成员保持原顺序、mtime、uid/gid、mode；
-- 写回 `manifest.json` 的 `runtimeVersion` / `rootfsSha256` / `rootfsBytes` /
-  `tarSha256` / `tarBytes` / `uncompressedBytes` / `entries` / `dshPlugins`。
+`repack-rootfs.py` 已处理两个必须知道的约束（改脚本时不要破坏）：
 
-**两个必须知道的约束**（脚本已处理，改动时不要破坏）：
+1. **不能先解包到磁盘**：`opt/python/share/terminfo` 里有解析到自身的符号链接环，`tarfile.extract()` 会 ELOOP。
+2. **tar.xz 流只能读一次**：为取 `runtime.json` 调了 `getmember()` 之后，后续 `for member in archive` 会静默少产出 99% 的成员。脚本用独立句柄读 `runtime.json`。
 
-1. **不能先解包到磁盘**。rootfs 的 `opt/python/share/terminfo` 里有解析到自身的符号链接
-   环，`tarfile.extract()` 会直接 ELOOP 失败。
-2. **tar.xz 流只能读一次**。`tarfile` 在 xz 上单遍读取，一旦为取 `runtime.json` 调了
-   `getmember()`，后续 `for member in archive` 只会悄悄产出几百个成员——归档看着"成功"，
-   实际丢了 99% 的内容。脚本因此用独立句柄读 `runtime.json`。
+单次重打包约 6 分钟（33800 个成员、约 800 MB 未压缩），同一输入两次产出字节一致。
 
-版本号约定：
-
-```text
-r15-dsh0.2.2-rc.1-node24.22.1-ubuntu24.04.5-mesh0.1.3-<inputs>-presetsN
-```
-
-`mesh<版本>` 跟插件 tgz 的 `package.json.version`；每改一次 overlay 就递增 `presetsN`，
-App 才会触发 runtime 升级。
-
-单次重打包约 6 分钟（33800 个成员、800 MB 未压缩）。同一份输入跑两次产出字节一致的
-`tar.xz`，便于核对。
-
-### 2.4 校验重打结果
-
-脚本已写回 manifest，但仍应确认归档内容（目录项数量应与原归档一致）：
+### 2.3 校验重打结果
 
 ```sh
-python3 - <<'EOF'
-import tarfile
-with tarfile.open('runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz','r:xz') as t:
-    n = 0
-    plugin = []
-    rt = None
-    for m in t:
-        n += 1
-        if 'dsh-mesh/plugin' in m.name: plugin.append(m.name)
-        if m.name == 'etc/dsh-app/runtime.json':
-            import json; rt = json.loads(t.extractfile(m).read())
-    print('members:', n)                 # 应与原归档同一量级（约 33800）
-    print('plugin entries:', len(plugin)) # 应为 9（目录 2 + 文件 7）
-    print('runtime.json version:', rt['runtimeVersion'])
-EOF
+python3 -I -c "
+import json
+m = json.load(open('runtime/out/arm64-v8a/assets/runtime/manifest.json'))
+print('runtimeVersion:', m['runtimeVersion'])
+for p in m.get('dshPlugins') or []:
+    print('plugin:', p['name'], p['version'], p['sha256'][:16])
+"
 ```
 
-再确认插件真的带着修复（不是又一次打进旧包）：
+`dshPlugins[0].sha256` 必须与 `shasum -a 256 "$MESH_TGZ"` 一致。
+
+### 2.4 构建 APK
 
 ```sh
-python3 - <<'EOF'
-import tarfile
-with tarfile.open('runtime/out/arm64-v8a/assets/runtime/rootfs-arm64-v8a.tar.xz','r:xz') as t:
-    for m in t:
-        if m.name.endswith('dsh-mesh/plugin/lib/index.mjs'):
-            s = t.extractfile(m).read().decode()
-            for label, pat in [('host reconnect', 'initialDelayMs: 4e3'),
-                               ('empty fp guard', 'trim() === ""'),
-                               ('host watchdog', 'hostNudgedAt')]:
-                print('OK  ' if pat in s else 'MISS', label)
-            break
-EOF
+export JAVA_HOME=$HOME/development/jdk17/Contents/Home
+export ANDROID_HOME=$HOME/development/android-sdk
+export PATH=$HOME/development/flutter/bin:$PATH
+
+tooling/build-apk.sh -f arm64        # 正式 release，用 key.properties 的 release key
 ```
 
-并把新 `rootfs-arm64-v8a.tar.xz` 复制到同一目录。
+产物：`app/build/app/outputs/flutter-apk/app-arm64-release.apk`。
 
-注意：rootfs 内 `etc/dsh-app/runtime.json` 的 `runtimeVersion` 必须和外层 manifest 完全一致，否则 App 的兼容性检查会拒绝升级。
+> **不要用 `flutter build apk` 直接发包**：它不走 `build-apk.sh` 的 versionCode 编码，也容易漏掉 `runtime/out` 里的新 rootfs。
 
-### 2.5 构建 APK
-
-临时把测试包 `applicationId` 设为 `.mesh`：
+需要与正式包并排安装时，用 Gradle 属性拿 dev 包名：
 
 ```sh
-cd app
-
-JAVA_HOME=$JDK17 \
-ANDROID_HOME=$ANDROID_SDK \
-$FLUTTER/bin/flutter build apk --debug --flavor arm64 --target-platform android-arm64
+cd app/android && ./gradlew :app:assembleArm64Debug -PtestAppId=true
 ```
 
-产物：
-
-```text
-app/build/app/outputs/flutter-apk/app-arm64-debug.apk
-```
-
-校验：
+### 2.5 校验 APK
 
 ```sh
-$ANDROID_SDK/build-tools/36.0.0/aapt2 dump badging \
-  app/build/app/outputs/flutter-apk/app-arm64-debug.apk | head -3
+APK=app/build/app/outputs/flutter-apk/app-arm64-release.apk
 
-unzip -p app/build/app/outputs/flutter-apk/app-arm64-debug.apk \
-  assets/runtime/manifest.json | python3 -m json.tool | head
+# 包名 / 版本
+$ANDROID_HOME/build-tools/36.0.0/aapt2 dump badging "$APK" | head -1
+
+# 内置 runtime
+unzip -p "$APK" assets/runtime/manifest.json | python3 -m json.tool | head -20
+
+# 签名（v1/v2/v3 都要 true，证书 CN=DSH Orb）
+$JAVA_HOME/bin/java -jar $ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar \
+  verify -v --min-sdk-version 21 --print-certs "$APK" | grep -E "Verified using|DN:|SHA-256 digest"
 ```
-
-确认包名、`runtimeVersion`、`dshPlugins[0].config.incomingPreset`。
-
-构建完成后把 `applicationId` 改回 `io.github.ccch1mneyyy.dsh_app`，避免误覆盖原 App。
 
 ### 2.6 安装与 runtime 升级
 
 ```sh
-adb -s "$PHONE_SERIAL" install -r \
-  app/build/app/outputs/flutter-apk/app-arm64-debug.apk
-
-adb -s "$PHONE_SERIAL" shell monkey \
-  -p "$DSH_TEST_APP" -c android.intent.category.LAUNCHER 1
+adb -s "$PHONE_SERIAL" install -r "$APK"
+adb -s "$PHONE_SERIAL" shell monkey -p top.dshorb.app -c android.intent.category.LAUNCHER 1
 ```
 
-App 会自己走 runtime upgrade：
+App 自己走 runtime upgrade：解压新 rootfs 到 `files/runtime/staging` → 校验 `runtime.json` 与 manifest → 检查 base identity → 切换。
 
-1. 从 APK assets 解压新 rootfs 到 `files/runtime/staging`；
-2. 校验 `staging/etc/dsh-app/runtime.json` 与 manifest；
-3. 检查 base identity；
-4. 切换到新 rootfs。
+**确认升级完成**：启动后看「设置 → 关于」的版本号，以及本机引擎是否「运行中」。
 
-用版本文件确认：
-
-```sh
-adb -s "$PHONE_SERIAL" shell run-as "$DSH_TEST_APP" \
-  cat files/runtime/rootfs.version
-```
-
-升级页会显示类似 `94% / 170 / 179 MB` 的进度。看到目标版本后再继续。
+> release 包**不能 `run-as`**（`package not debuggable`），所以旧文档里的
+> `adb shell run-as <pkg> cat files/runtime/rootfs.version` 对正式包不适用。
+> 需要核对 runtime 版本时，直接读 APK 内的 manifest（2.5），或看 App 内的引擎信息。
 
 ## 3. 设备操作与观测
 
@@ -451,15 +412,27 @@ ssh <relay-host> 'docker logs --since 10m deploy-server-1'
 
 关注 `ws_hello_authenticated` / `ws_peer_disconnected` / `CONNECTION_FAILED`。
 
-### 4.6 手机侧 Mesh 页面
+### 4.6 手机侧互联页
 
-设置 → 远程主机 → 互联：
+入口：抽屉 →「互联」（`AppIcons.link` 那个圆形按钮）。
 
-- 手机自己的节点和连接数；
-- 对端设备（Mac / Windows）是否在线；
-- 工作区和会话列表；
-- 远端会话的实时 transcript；
-- 手机自己创建的任务会话可输入/停止，电脑创建的任务会话只读。
+应看到：
+
+- 顶部：本机名、服务器地址、「已连接 N/N」、已加入互联；
+- 「修改本机名称」独立成段；
+- 下方每台对端设备一行，**默认全部折叠**，行尾是向下箭头；展开后行尾变向上箭头，且**同时只展开一台**；
+- 展开后每个工作区一行：文件夹图标 + 名字 + 折叠箭头，在线设备的行尾还有「＋」（新建对话）；
+- 底部：「退出互联」。
+
+逐项验证：
+
+1. **折叠**：点工作区标题，它的会话列表收起；再点展开回来。切换设备时折叠状态复位。
+2. **新建会话**：点工作区行尾的「＋」→ 应在该电脑的这个工作区建一个会话并直接进入，标题「新建对话」，副标题是「<设备名> · <工作区名>」，正文显示「这个会话还没有记录。」
+3. **普通会话可输入**：打开任意非任务会话，输入框占位是「输入消息，继续这段远端会话…」，可编辑、可发送，能收到回复。
+4. **任务会话标记**：由 `device_agent` 创建的会话仍带 `taskId`，「停止全部」只停这类会话。
+
+> 会话行图标是聊天气泡＝可输入；锁＝只读（设备离线或后端不支持）。
+
 
 ## 5. 测试层次
 
@@ -546,8 +519,15 @@ git grep -n -I -E \
 
 ## 附：当前状态
 
+> 本节只记「写这份文档时」的快照，用来判断文档是否过期。具体 SHA 以 `git log` 为准。
+
 - 分支：`feat/mesh-runtime`
-- 最新提交：`a53d51f`（`fix(phone): stop the orb polling dispatched tasks`）
-- 真机 runtime：`...-presets4`
-- 测试包：`io.github.ccch1mneyyy.dsh_app.mesh`，仍在手机上
-- 原 DSH Go：已被 force-stop，数据未动；测完需恢复
+- App 版本：`0.1.2`（versionName），包名 `top.dshorb.app`
+- mesh 插件：`0.1.6`
+- 真机 runtime：`...-mesh0.1.6-f3d905d2e731-presets9`
+- 只装一个 App，没有并存的测试包；没有需要恢复的「原 DSH Go」
+
+配套文档：
+
+- `docs/release.md`——打包与发版（版本号、签名、`release_assets.py`）
+- `dsh-orb-cordis/docs/21-packaging-and-deploy.md`——跨仓库的完整打包与三端部署手册

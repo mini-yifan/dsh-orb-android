@@ -4,20 +4,42 @@ App 以 APK 分发、不上商店，更新靠 App 自己查 GitHub Releases、�
 
 > **正式发版前必须先换成固定的发布密钥**（见「签名」）。存在 `app/android/key.properties` 时 release 使用其中的发布密钥；缺少配置时仅为本地构建回落到 debug key，不可用于正式发布。
 
+## 本仓库的发版范围
+
+本 App 已独立为 **DSH Orb**，与上游 dsh-go 没有关系。发版只走 GitHub Release：
+
+| 项 | 值 |
+| --- | --- |
+| 包名 | `top.dshorb.app`；`-PtestAppId=true` 时为 `top.dshorb.app.dev`，可与正式包并排安装 |
+| 发布仓库 | `mini-yifan/dsh-orb-android`（**当前为私有**，见下方「私有仓库与更新检查」） |
+| 产物 | `dist/dsh-orb-<版本>-arm64.apk` + `SHA256SUMS` + `update.json` |
+| 签名 | `app/android/key.properties` → `~/keys/dsh-orb-release.jks`，证书 `CN=DSH Orb` |
+
+`tooling/release_assets.py` 的 `APP`、`REPO` 常量就是上表后两行；改品牌时先改它们。
+
+> **上游的发布链路在本仓库不存在。** 本仓库没有 `services/share-worker`、没有 R2 / Cloudflare Worker、没有 `dl.dshtui.com` 与 `go.dshtui.com`、没有内测通道令牌。本文后半部分关于「三条线路」「内测通道」的旧内容是上游 DSH Go 的，**照着做会失败**。要加自托管下载源属于新工作。
+
+### 私有仓库与更新检查
+
+`mini-yifan/dsh-orb-android` 是私有仓库，而 App 的更新检查用匿名请求读 GitHub Releases——**匿名访问私有仓库一律 404**，App 只会显示「暂时检查不了」。
+
+发版前必须明确走哪条：
+
+1. **只手动分发**（当前做法）：打好的 APK 直接发，App 内「检查更新」不工作。适合小范围自用。
+2. **转公开仓库**：`gh repo edit mini-yifan/dsh-orb-android --visibility public`，之后 `releases/latest` 才可用。转公开前按第 6.2 节做安全复查。
+
 ## 资产约定
 
-每个版本一个 GitHub Release，仓库 `ccch1mneyyy/dsh-go`，必须公开（私有仓库匿名访问一律 404，App 只会显示「暂时检查不了」）。同一组文件也放在公开下载桶：`https://dl.dshtui.com/download/<版本>/<文件>`，最新版的清单在 `https://dl.dshtui.com/update.json`（见「公开下载桶 dl」）。
-
-正式版统一提供 arm64 安装包。`update.json` 供更新清单回退读取，`SHA256SUMS` 供缺少 GitHub digest 时校验 APK，`*.dshdelta` 是从最近几个旧版升上来的增量补丁（`docs/design/delta-update.md`），都由 App 自己用，不要求用户手动下载。GitHub 自动生成的 Source code 压缩包是源码快照，不是安装包。
+每个版本一个 GitHub Release，仓库 `mini-yifan/dsh-orb-android`。正式版统一提供 arm64 安装包。`update.json` 供更新清单回退读取，`SHA256SUMS` 供缺少 GitHub digest 时校验 APK，`*.dshdelta` 是从最近几个旧版升上来的增量补丁（`docs/design/delta-update.md`），都由 App 自己用，不要求用户手动下载。GitHub 自动生成的 Source code 压缩包是源码快照，不是安装包。
 
 | 项 | 约定 | 例子 |
 |---|---|---|
-| 版本名 | `app/pubspec.yaml` 的 `version: X.Y.Z[-pre]`，即 versionName；后面的 `+1` 只是占位 | `1.2.0` |
-| 构建号 | Android versionCode，由 `tooling/build-apk.sh` 按构建时间生成，见「构建号」 | `10251234` |
-| tag | `v` + 版本名（不带 `+N`） | `v1.2.0`、`v1.3.0-beta.1` |
-| APK | `dsh-go-<版本名>-<flavor>.apk`，正式版 flavor 固定为 `arm64`；文件名不带 `+N`（GitHub 会改写 `+`） | `dsh-go-1.2.0-arm64.apk` |
-| 增量补丁 | `dsh-go-<版本名>-from-<旧版本名>-arm64.dshdelta`，只发不到整包 60 % 的 | `dsh-go-1.2.0-from-1.1.0-arm64.dshdelta` |
-| 校验和 | `SHA256SUMS`，`sha256sum` 的标准输出，APK 和补丁都在里面 | `<hex>  dsh-go-1.2.0-arm64.apk` |
+| 版本名 | `app/pubspec.yaml` 的 `version: X.Y.Z[-pre]`，即 versionName；后面的 `+1` 只是占位 | `0.1.2` |
+| 构建号 | Android versionCode，由 `tooling/build-apk.sh` 按构建时间生成，见「构建号」 | `11202149` |
+| tag | `v` + 版本名（不带 `+N`） | `v0.1.2` |
+| APK | `dsh-orb-<版本名>-<flavor>.apk`，正式版 flavor 固定为 `arm64`；文件名不带 `+N`（GitHub 会改写 `+`） | `dsh-orb-0.1.2-arm64.apk` |
+| 增量补丁 | `dsh-orb-<版本名>-from-<旧版本名>-arm64.dshdelta`，只发不到整包 60 % 的 | `dsh-orb-0.1.2-from-0.1.1-arm64.dshdelta` |
+| 校验和 | `SHA256SUMS`，`sha256sum` 的标准输出，APK 和补丁都在里面 | `<hex>  dsh-orb-0.1.2-arm64.apk` |
 | 清单 | `update.json`（schema 1），镜像和自托管源都读它 | 见下 |
 | 更新说明 | Release 正文（Markdown），App 弹窗里原样渲染 | |
 
@@ -26,19 +48,19 @@ App 以 APK 分发、不上商店，更新靠 App 自己查 GitHub Releases、�
 ```json
 {
   "schema": 1,
-  "version": "1.2.0+10251234",
-  "tag": "v1.2.0",
-  "title": "DSH 1.2.0",
-  "publishedAt": "2026-11-01T08:00:00Z",
+  "version": "0.1.2+11202149",
+  "tag": "v0.1.2",
+  "title": "DSH Orb 0.1.2",
+  "publishedAt": "2026-11-20T13:49:00Z",
   "notes": "## 新功能\n…",
-  "page": "https://github.com/ccch1mneyyy/dsh-go/releases/tag/v1.2.0",
+  "page": "https://github.com/mini-yifan/dsh-orb-android/releases/tag/v0.1.2",
   "assets": {
-    "arm64": { "name": "dsh-go-1.2.0-arm64.apk", "size": 180107933, "sha256": "…" }
+    "arm64": { "name": "dsh-orb-0.1.2-arm64.apk", "size": 206620966, "sha256": "…" }
   },
   "patches": {
     "arm64": [
-      { "from": "<1.1.0 APK 的 SHA-256>", "fromVersion": "1.1.0+10201200",
-        "name": "dsh-go-1.2.0-from-1.1.0-arm64.dshdelta", "size": 13278848, "sha256": "…" }
+      { "from": "<0.1.1 APK 的 SHA-256>", "fromVersion": "0.1.1+11201957",
+        "name": "dsh-orb-0.1.2-from-0.1.1-arm64.dshdelta", "size": 13278848, "sha256": "…" }
     ]
   }
 }
@@ -75,40 +97,79 @@ versionCode = (年 - 2026) × 10^8 + MMDDhhmm      时钟固定按 UTC+8
 
 ## 发版步骤
 
-1. **改版本名**：`app/pubspec.yaml` 的 `version:`，版本名按 semver 升；`+1` 不动。之后打的开发包也带新版本名，不会被提示「更新」到这一版。
-   - **同步使用说明**：按本版界面改动更新 `docs/guide/`，把 `docs/guide/README.md` 的 `> dsh-go X.Y.Z` 改成新版本名，`python3 app/tool/guide_sync.py` 重新生成 App 内置技能，`python3 app/tool/guide_sync.py --check` 通过再打包（它核对入口路径、界面文字、页面链接与版本号）。
-2. **只打包 arm64 正式版**（运行时要先 `runtime/build-runtime.sh` 产出 `runtime/out/`）。x64 仅供必要的本地模拟器验证，不上传、不放入正式更新清单：
+下面是一份**在 2026-11-20 实测跑通**的完整序列（0.1.1 → 0.1.2）。按顺序做，任何一步失败就停下来看报错，不要跳到下一步。
 
-   ```sh
-   tooling/build-apk.sh
-   ```
+### 1. 升版本名
 
-   脚本顺带传 `DSH_APP_VERSION=<版本名>+<构建号>`，它只影响诊断信息里的版本（`lib/state/app_info.dart` 是编译期常量）；更新检查读的是系统里真实的 versionName / versionCode，不依赖它。
+```sh
+# app/pubspec.yaml: version: 0.1.2+1
+```
 
-   **公测起**（GitHub Release 和公开渠道的包）打开求 star 提示，内测包不加：
+`+1` 是占位，不要动——versionCode 由 `build-apk.sh` 按构建分钟生成，手动改它会让降级判断出错。
 
-   ```sh
-   tooling/build-apk.sh -- --dart-define=DSH_STAR_PROMPT=true
-   ```
+### 2. 同步使用说明（会拦住打包）
 
-   提示的触发条件见 `docs/design/star-prompt.md`；使用时长从装上这个包算起。
-3. **确认签名**：对要发布的 arm64 APK 执行 `apksigner verify -v --min-sdk-version 21 --print-certs`。v1、v2、v3 三种签名都要是 `true`（v1 给仍读 JAR 签名的安装器和安全扫描；不加 `--min-sdk-version` 时 apksigner 按 minSdk 26 不查 v1），证书主题不得含 `CN=Android Debug`，证书 SHA-256 必须与上一版一致。验证失败时不要生成或上传 `dist/`、`update.json`。
-4. **生成资产**（改名、算校验和、写 `update.json`）。默认只收录 arm64；版本名取 pubspec，构建号用 `aapt2` 从 APK 里读。版本名不匹配或构建号还是占位的 `1` 时脚本直接报错：
+改版本名后 `guide_sync.py --check` **必然报错**，它要求 README 的版本行与 pubspec 一致：
 
-   ```sh
-   python3 tooling/release_assets.py --notes notes.md      # 产物在 dist/
-   ```
+```sh
+# docs/guide/README.md: > dsh-go 0.1.2   ← 前缀固定，只有数字跟着 pubspec
+python3 app/tool/guide_sync.py           # 重新生成内置技能 app/assets/skills/dsh-go-guide/
+python3 app/tool/guide_sync.py --check   # 必须干净
+```
 
-   顺带为最近 3 个已发布版本各做一个增量补丁（`--delta-from N`，`0` 不做、不联网）：用 `gh` 取各版的 arm64 APK（缓存在 `~/.cache/dshgo-release/apk/`，按该版的 `SHA256SUMS` 核对），只留不到整包 60 % 的，写进 `dist/`、`SHA256SUMS` 和 `update.json` 的 `patches`。换了运行时的版本补丁接近整包，会全部被丢掉，正常。格式、App 端回落规则和实测大小见 `docs/design/delta-update.md`。
+它同时校验：**加粗文字必须是真实 UI 标签**（来自 `app/lib/l10n/parts/*_<locale>.arb` 或 Android string resources）、相对链接可解析、中文页不许出现「会话」「实验」。
 
-   > **不要只跑 `gh release create`。** 它只更新 GitHub；内测通道的 `beta/update.json` 会停在旧版本。带着内测令牌装的旧版本会先问内测通道，于是报「已是最新」（1.0.4 卡住就是这个原因）。公测发版一律走下面这个脚本：它同时写 R2、GitHub（`--github`）并回下载核对。
-5. **上传并上线**：`services/share-worker/scripts/publish-release.sh`，`SHA256SUMS` 里的每个文件（APK、补丁）一次传到所有线路（R2、公开下载桶 dl、香港桶、GitHub Release），分别下载回来核对，全部一致才上线。见下面「发版到三条线路」。
-   - 公测起加 `--github`：GitHub Release 由脚本建（标题 `DSH Go <版本>`，正文取 `docs/changelog.md` 对应一节）。`release_assets.py` 最后打印的 `gh release create …` 不用再手动跑。
-   - 测试版（版本名带 `-`）脚本自动加 `--prerelease`：`releases/latest` 和 `releases/latest/download/…` 都跳过预发布，公开下载桶根目录的 `update.json` 也不换，只有正式版会推给用户。
-6. **内测期间**（`DOWNLOAD_ACCESS=key`）不加 `--github`，见下面「内测通道」。
-7. **验证**：在装着上一版的手机上 设置 → 关于 → 检查更新，走完下载和安装。
+> 改 UI 文案后忘了同步 guide，`--check` 会报 `**xxx** is not a zh UI label`。反过来，把非标签的普通描述加粗也会报错——去掉加粗即可。
+
+### 3. 打包
+
+运行时先在 `runtime/out/` 里（`runtime/.gitignore` 忽略它，不入库）。**手机端 rootfs 变了才需要重跑 `runtime/build-runtime.sh`**；只改 Dart/Android 代码时不用动它：
+
+```sh
+tooling/build-apk.sh                      # release arm64，产物 → app/build/app/outputs/flutter-apk/app-arm64-release.apk
+```
+
+输出行形如 `dsh-orb 0.1.2 (11202149, 2026-11-20 21:49 UTC+8)`。
+
+> **不要用 `flutter build apk` 直接构建发版包。** 它不走 `build-apk.sh` 的 versionCode 编码，且容易漏掉 `runtime/out` 里的新 rootfs——曾出现过 12:32 的 release 包里还带着上一版插件的情况。
+
+### 4. 确认签名
+
+```sh
+$JAVA_HOME/bin/java -jar $ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar \
+  verify -v --min-sdk-version 21 --print-certs \
+  app/build/app/outputs/flutter-apk/app-arm64-release.apk
+```
+
+三条都要满足：v1/v2/v3 全 `true`、证书主题不含 `CN=Android Debug`、SHA-256 与上一版一致（`02:24:c1:2a:...`，`CN=DSH Orb`）。不满足就不要往下走。
+
+### 5. 生成资产
+
+```sh
+cd tooling && python3 release_assets.py --notes /tmp/notes-0.1.2.md --delta-from 0
+```
+
+- `--delta-from 0`：本仓库还没有历史 Release，增量补丁会去 GitHub 拉旧包而失败。**首次发版或没有历史 Release 时必须用它。**
+- 产物在 `dist/`：`dsh-orb-<版本>-arm64.apk`、`SHA256SUMS`、`update.json`。
+- 脚本会读 pubspec 的版本名 + 从 APK 里读 versionCode，**两者不匹配直接报错**（这是防止打错包的主要闸门）。
+- 必须在 `tooling/` 目录下跑：`python3 -I tooling/release_assets.py` 会因为 `-I` 移除脚本目录而 `ModuleNotFoundError: apk_delta`。
+
+### 6. 发布
+
+```sh
+gh release create v0.1.2 dist/* --repo mini-yifan/dsh-orb-android \
+  --title 'DSH Orb 0.1.2' --notes-file /tmp/notes-0.1.2.md
+```
+
+脚本最后会把这行打印出来。**私有仓库下 App 内检查更新不工作**（见「私有仓库与更新检查」），所以这一步主要意义是留档。
+
+### 7. 真机验证
+
+装到手机上，确认「设置 → 关于」的版本号是新的，再按 `docs/phone-device-testing.md` 跑功能测试。
 
 ## 内测通道（go.dshtui.com/beta）
+
+> **代码在本仓库，服务端不在。** `app/lib/update/update_config.dart` 的 `UpdateChannel` 和 `tooling/build-apk.sh --beta` 都还在，但签发/校验它的 Worker、KV、`~/keys/dshgo-beta-*` 凭据属于上游，没有搬过来。没有那套服务，`--beta` 打出来的包只会一直「检查更新失败」。下面的运维命令同样属于上游，保留作参考。
 
 内测包不公开：人凭**密钥**在 `https://go.dshtui.com/beta` 下载，已装的 App 凭构建时注入的**通道令牌**检查更新、App 内下载。两者分开：群里的密钥可以随时换、随时吊销，已装 App 照常收到更新。服务端是 `services/share-worker`（设计见 `docs/design/share-links.md` §14），凭据只以文件形式存在发版机器上，放在仓库之外：
 
@@ -167,201 +228,55 @@ npx wrangler r2 object put dshgo-share/beta/update.json --file prev.json --conte
 
 **限制**：令牌编在 APK 里，拿到 APK 的人能取出来，所以它挡的是「没有安装包的人」，不是装过的人；泄露了就按上表换令牌。没有令牌的旧包（包括 0.9.1）不会走内测通道，要用户在页面上手动下载一次带令牌的新包。
 
-## 发版到三条线路（公测起）
+## 多线路分发（本仓库不适用）
 
-下载页（`go.dshtui.com`）给同一个 APK 三条线路，SHA-256 和大小都一样：
+上游 DSH Go 有「国内 / 海外 / GitHub 三条线路」的分发体系：`services/share-worker`（Cloudflare Worker）、公开下载桶 `dl.dshtui.com`（R2）、香港对象存储、以及 `go.dshtui.com` 下载页。
 
-| 线路 | 下载地址 | 存在哪 | 谁默认用它 |
-|---|---|---|---|
-| 国内线路 | `<CN_BASE_URL><版本>/<文件>` | 香港对象存储（阿里云 OSS 或腾讯云 COS），公共读 | `request.cf.country` 为 `CN` |
-| 海外线路 | 公开模式 `https://dl.dshtui.com/download/<版本>/<文件>`（清单 `routes` 里没有 `dl` 的旧版本是 `/download/<版本>/<文件>`）；密钥模式是 10 分钟的签名链接 | 公开模式：公开 R2 桶 `dshgo-dl`，字节不经 Worker；旧版本和密钥模式：R2 `beta/<版本>/`，经 Worker | 其他地区 |
-| GitHub | `github.com/ccch1mneyyy/dsh-go/releases/download/v<版本>/<文件>` | GitHub Release | 手动切换 |
+**这些在本仓库都不存在**，`services/`、`wrangler.jsonc`、相关脚本都没有搬过来。本仓库的发版就是一回事：`tooling/release_assets.py` 产出 `dist/`，然后 `gh release create` 传到 GitHub Release。
 
-- 页面上用分段按钮切换（纯 CSS，不跑脚本）；`?via=cn|global|github` 直接指定线路，`?lang=zh|en` 指定语言（默认跟浏览器）。
-- 一条线路只在**配置了**并且**这一版确实传上去了**时出现：`beta/update.json` 的 `routes` 由发布脚本在下载核对之后写入。`CN_BASE_URL` 为空时国内线路整项隐藏；没有 `routes` 的旧清单只给海外线路。
-- 安装说明（Android 8.0+、允许浏览器安装未知应用）和「社区作品，非 DeepSeek 官方应用」在页面上；微信、QQ 内置浏览器里仍是「在浏览器打开」提示页。
-- App 内更新：带通道令牌的包走 `/beta/update.json` 和 R2，其余走 GitHub 和公共加速镜像；公开下载桶根目录的 `update.json` 也给 App 读（App 侧见 `app/lib/update/`）。香港桶目前只给网页用。
+要恢复多线路分发，属于新工作：需要先决定用哪套存储、把 Worker 与脚本迁过来、再处理凭据。不要按上游文档直接执行——那些命令引用的路径在本仓库里不存在。
 
-### 公开下载桶 dl（dl.dshtui.com）
+## 统计（本仓库不适用）
 
-只放发版文件的 R2 桶 `dshgo-dl`，绑自定义域名 `https://dl.dshtui.com`，公开读。海外线路的下载直接从这里出，不经 Worker（不占 Worker 请求、没有 Worker 的 CPU / 时长限制），R2 出口流量不收费。用户上传的分享链接所在的 `dshgo-share` 保持私有：它要是公开了，拿到对象键的人就能绕过 Worker 的过期和额度。
+上游用 Cloudflare Analytics Engine 记下载、更新检查和匿名使用报告，代码在 `services/share-worker` 与 `wrangler.jsonc`——**两者都不在本仓库**。本仓库的 App 仍会按 `docs/design/share-links.md` 描述的行为上报，但因为没有对应的收集端，数据没有去处。
 
-| 路径 | 内容 | `Cache-Control` |
-|---|---|---|
-| `download/<版本>/<文件>` | `SHA256SUMS` 里的每个文件（APK、补丁）、`SHA256SUMS`、这一版的 `update.json` | `public, max-age=31536000, immutable`：同一版本永远不换文件 |
-| `update.json` | 最新正式版的清单（schema 1，`release_assets.py` 的内容 + 更新日志的 `notes` / `notesByLocale`，`assets.*.url` 是上面的绝对地址，`patches` 原样）；预发布版不换它 | `public, max-age=300` |
-
-- 页面上：`wrangler.jsonc` 的 `DL_BASE_URL`（`https://dl.dshtui.com/`）配了、且这一版的 `routes` 有 `dl`，海外按钮（经 `/download/get` 计数）才 302 到这里；否则还是 `/download/<版本>/<文件>`。Worker 的 `/download/<版本>/<文件>` 一直保留，给已经发出去的链接。
-- 脚本：`publish-release.sh` 默认就传（`DL_BUCKET` 默认 `dshgo-dl`，`DL_BASE_URL` 默认读 `wrangler.jsonc`），`--no-dl` 跳过。用的是 R2 那把 token 派生的 S3 凭据，token 要有账号级的 Workers R2 Storage:Edit。
-- **一次性开通**（后台操作，脚本不建）：R2 新建桶 `dshgo-dl`，在桶的设置里给它连接自定义域名 `dl.dshtui.com`（DNS 记录由 Cloudflare 自动建）；不要开 `r2.dev` 公开地址。之后 `curl -I https://dl.dshtui.com/update.json` 是 404 就对了，第一次发版后变成 200。
-
-### 开关：DOWNLOAD_ACCESS
-
-Worker 变量，写在 `services/share-worker/wrangler.jsonc` 的 `vars` 里：
-
-| 值 | `/beta` | `/download` | `/download/<版本>/<文件>` |
-|---|---|---|---|
-| `key`（默认） | 输入密钥 → 三条线路 | 404 | 404 |
-| `public` | 302 → `/download`（带上查询参数） | 三条线路，不要密钥 | APK、`SHA256SUMS` 公开下载 |
-
-两种模式都不变：App 的通道令牌、`/beta/update.json`、`/beta/<版本>/<文件>`（令牌或签名链接）、`/beta/api/unlock`；`/update.json` 一直是 404。跳转用 302 不用 301：切回 `key` 时浏览器不会记着旧跳转。
-
-公测当天：
-
-1. `wrangler.jsonc`：`"DOWNLOAD_ACCESS": "public"`；香港桶开通了就同时填 `"CN_BASE_URL"`。提交。
-2. `CF_TOKEN_FILE=<token 文件> scripts/provision.sh deploy`（部署并跑线上 e2e）。
-3. 发版（下一小节，带 `--github`）。顺序反过来也行：清单里没有 `routes` 的版本只显示海外线路，不会出现死链。
-4. 看一眼 `https://go.dshtui.com/download`、`/beta`（应跳到 `/download`）、`/download?via=cn`。
-
-- 变量以 `wrangler.jsonc` 为准：在 Cloudflare 后台改的值，下次部署会被文件覆盖。
-- 切回：改回 `"key"` 再部署；已经发出去的 `/download` 链接变回 404。
-
-### 香港桶（可选）
-
-二选一，开一个只放安装包的桶：
-
-| | 阿里云 OSS | 腾讯云 COS |
-|---|---|---|
-| 地域 | 中国香港，`cn-hongkong` | 中国香港，`ap-hongkong` |
-| 桶名 | 例如 `dshgo-cn` | 例如 `dshgo-cn-<APPID>`（COS 桶名带 APPID） |
-| 读写权限 | 公共读（先关掉「阻止公共访问」） | 公有读私有写 |
-| `CN_BASE_URL` | `https://<桶名>.oss-cn-hongkong.aliyuncs.com/` | `https://<桶名>.cos.ap-hongkong.myqcloud.com/` |
-| 命令行 | ossutil 2.x（`ossutil version` 显示 2.x） | coscli |
-| AccessKey | RAM 用户，只授权这一个桶，策略见下 | CAM 子用户，只授权这一个桶，策略见下 |
-
-要交给发版机器的：桶名、地域、`CN_BASE_URL`，以及 AccessKey 的 ID 和 Secret（各存一个文件，权限 600）。另外建议在控制台设**费用 / 流量告警**：香港桶的外网流量按量计费（价格以控制台为准），180 MB 的包下载 1000 次约 180 GB；公共读地址谁都能刷。
-
-阿里云 RAM 自定义策略（`dshgo-cn` 换成桶名）：
-
-```json
-{
-  "Version": "1",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["oss:PutObject", "oss:GetObject", "oss:ListObjects", "oss:ListParts", "oss:AbortMultipartUpload"],
-    "Resource": ["acs:oss:*:*:dshgo-cn", "acs:oss:*:*:dshgo-cn/*"]
-  }]
-}
-```
-
-腾讯云 CAM 自定义策略（换成 APPID 和桶名）：
-
-```json
-{
-  "version": "2.0",
-  "statement": [{
-    "effect": "allow",
-    "action": ["name/cos:HeadBucket", "name/cos:PutObject", "name/cos:HeadObject", "name/cos:GetObject",
-               "name/cos:InitiateMultipartUpload", "name/cos:UploadPart", "name/cos:CompleteMultipartUpload",
-               "name/cos:AbortMultipartUpload", "name/cos:ListParts", "name/cos:ListMultipartUploads"],
-    "resource": ["qcs::cos:ap-hongkong:uid/<APPID>:dshgo-cn-<APPID>/*", "qcs::cos:ap-hongkong:uid/<APPID>:dshgo-cn-<APPID>/"]
-  }]
-}
-```
-
-两份策略都没在真账号上试过；命令行报 AccessDenied 时，按报错里的 Action 补上。第一次真传建议用一个测试版本加 `--no-latest`。
-
-### 发版
-
-```sh
-cd services/share-worker
-export CF_TOKEN_FILE=<Cloudflare token 文件>
-export CN_PROVIDER=oss CN_BUCKET=dshgo-cn CN_REGION=cn-hongkong          # COS：cos、dshgo-cn-<APPID>、ap-hongkong
-export CN_ACCESS_KEY_ID_FILE=<AccessKey ID 文件> CN_ACCESS_KEY_SECRET_FILE=<AccessKey Secret 文件>
-scripts/publish-release.sh ../../dist --github --dry-run    # 先看一遍要做什么
-scripts/publish-release.sh ../../dist --github
-```
-
-| 步骤 | 做什么 |
-|---|---|
-| 1 R2 | `SHA256SUMS` 里的每个文件（APK、补丁）和 `SHA256SUMS` → `dshgo-share/beta/<版本>/`，以及公开桶 `dshgo-dl/download/<版本>/`（带 immutable 的 Cache-Control）。rclone 分片续传，没有就 wrangler |
-| 2 国内 | 同样这些 → 香港桶 `<版本>/`（`ossutil cp` / `coscli cp`，带 Content-Type 和 Cache-Control）。`CN_BASE_URL` 为空时跳过 |
-| 3 GitHub | `gh release create v<版本> … --draft`：arm64 APK、补丁、`SHA256SUMS`、`update.json`（不带 `url`，App 自己拼 GitHub 地址），正文先提供 arm64 直接下载链接，并说明清单、校验文件和补丁无需手动下载，再列更新日志的「中文」「English」两节；正式版没有 x64 下载入口 |
-| 4 核对 | 每条线路、每个文件下载回来比大小和 SHA-256：R2 用通道令牌，公开桶和香港桶用公开地址，GitHub 草稿用 API |
-| 5 上线 | 全部一致才：发布 GitHub 草稿（并确认公开地址可下）→ 公开桶的 `download/<版本>/update.json` 和根目录 `update.json` → 传 `beta/<版本>/update.json` → 最后换 `beta/update.json` |
-| 之后 | 确认 `dl.dshtui.com/update.json` 是这一版、线上页面（`/download` 或 `/beta`）给出这一版和每条线路的链接，再从页面的海外线路下载一次 |
-
-| 参数 / 变量 | 作用 |
-|---|---|
-| `--dry-run` | 每一步打印将要执行的命令，什么都不传、不下载、不联网 |
-| `--github` | 建 GitHub Release；默认不建 |
-| `--no-dl` | 这次不传公开下载桶（密钥模式发内测版时必须加） |
-| `--no-cn` | 这次不传香港桶 |
-| `--no-latest` | 只传和核对，不上线（GitHub 留在草稿） |
-| `--skip-verify` | 不下载核对；必须同时 `--no-latest` |
-| `CN_PROVIDER` `CN_BUCKET` `CN_REGION` | 香港桶：`oss`/`cos`、桶名、地域 |
-| `CN_ACCESS_KEY_ID_FILE` `CN_ACCESS_KEY_SECRET_FILE` | 只写这个桶的 AccessKey，各一个文件 |
-| `CN_BASE_URL` | 默认读 `wrangler.jsonc`，脚本和页面用同一个值 |
-| `DL_BUCKET` `DL_BASE_URL` | 公开下载桶，默认 `dshgo-dl` 和 `wrangler.jsonc` 的 `DL_BASE_URL`；任一为空就不传 |
-| `CF_ACCOUNT_ID` `CF_ACCOUNT_ID_FILE` | R2 所在的账号；不设时读 `~/keys/dshgo-cloudflare-account-id`，再不行才读 `wrangler.jsonc`。读到的是占位符就在第一步之前报错 |
-| `GH_TOKEN_FILE` | 可选；不设就用 `gh auth login` 的登录（要有仓库写权限） |
-| `BETA_TOKEN_FILE` `BETA_KEY_FILE` | 通道令牌（读回 R2）；密钥模式下还要一把有效密钥（核对 `/beta`） |
-
-- 凭据只从文件读，写进私有临时目录里的配置文件（退出时 shred）或单条命令的环境变量，不打印、不上命令行。
-- 重跑是安全的：已经传上去且大小一致的文件跳过（第 4 步照样下载核对）；同一版本换了文件在任何一条线路上都会被拒绝，修包要升版本名。
-- **正式版的 GitHub Release 一发布，`releases/latest` 就指向它**：所有不带通道令牌的 App（0.9.1 及更早、开发包）都会收到更新提示。
-- 演练：`npm run smoke:publish`（假的 dist（带一个补丁）、假的 ossutil / coscli / gh、本地目录充当公开桶、本地 `wrangler dev`，不连任何真实服务）。
-
-### 回滚
-
-| 撤回什么 | 做法 |
-|---|---|
-| 页面和带令牌的 App | 上一版的清单设为最新（「内测通道」的回滚两行）。上一版若是旧脚本发的、清单里没有 `routes`，回滚后页面只给海外线路 |
-| 公开桶的 `update.json` | `npx wrangler r2 object get dshgo-dl/download/<上一版>/update.json --file prev.json --remote`，再 `npx wrangler r2 object put dshgo-dl/update.json --file prev.json --content-type 'application/json; charset=utf-8' --cache-control 'public, max-age=300' --remote`（环境变量同上）；边缘最多再给 5 分钟旧的。上一版没传过公开桶（回滚的是第一个走 dl 的版本）时没有可回的清单，删掉 `dshgo-dl/update.json` 即可 |
-| GitHub 上的这一版 | `gh release edit v<版本> --repo ccch1mneyyy/dsh-go --draft=true` 撤回成草稿，`releases/latest` 回到上一版；彻底删除用 `gh release delete v<版本> --repo ccch1mneyyy/dsh-go --cleanup-tag` |
-| 香港桶 | 不用动：页面跟着清单走，不再指向新版；要删就删 `<版本>/` |
-| 公开下载 | `DOWNLOAD_ACCESS` 改回 `"key"` 再部署 |
-
-## 统计
-
-下载、更新检查和 App 的匿名使用报告都记在 Cloudflare 的 Analytics Engine 里，不存 IP；数据模型和隐私说明见 `docs/design/share-links.md` §15。
-
-**开通**（一次，我们的账号已经做完）。`wrangler.jsonc` 绑定了三个数据集，`provision.sh` 默认带着部署；没开 Analytics Engine 的账号带着它们部署会失败，所以先开通。没开通期间（`--no-analytics`）下载和更新检查不计数，`/api/usage/v1` 是 404。
-
-1. 在 Cloudflare 后台的 Analytics Engine 页面开通（免费计划可用）。
-2. `USAGE_SECRET` 和带上数据集的部署：
-
-   ```sh
-   cd services/share-worker
-   (umask 077; openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' > <USAGE_SECRET 文件>)
-   CLOUDFLARE_API_TOKEN="$(cat <token 文件>)" CLOUDFLARE_ACCOUNT_ID="$(cat ~/keys/dshgo-cloudflare-account-id)" \
-     npx wrangler secret put USAGE_SECRET < <USAGE_SECRET 文件>
-   CF_TOKEN_FILE=<token 文件> scripts/provision.sh deploy   # 默认绑定 DOWNLOADS、CHECKS、USAGE（数据集第一次写入时自动建）
-   ```
-
-3. 点一次下载页的按钮，几分钟后 `scripts/stats.sh` 有数。没开通 Analytics Engine 的账号（fork）部署时要带 `--no-analytics`（或 `DSH_ANALYTICS=0`），否则部署失败。
-
-- 读数用的 token 要加一项权限：Account → Account Analytics → Read（部署用的那把可以一起加，也可以另开一把只读的）。
-- `USAGE_SECRET` 不要换：换了以后安装编号的哈希对不上，留存从那天断开。丢了也只是从头算，不影响 App。
-- 没设 `USAGE_SECRET` 时 `/api/usage/v1` 是 404，下载和更新检查照常计数。
-
-**看数**：
-
-```sh
-CF_TOKEN_FILE=<token 文件> scripts/stats.sh              # 最近 14 天（UTC+8）
-CF_TOKEN_FILE=<token 文件> scripts/stats.sh --days 30
-scripts/stats.sh --dry-run                               # 只打印 SQL
-scripts/github-downloads.sh                              # GitHub 每个 release 每个文件的累计下载数
-```
-
-AE 只留约 3 个月，想长期保留就定期把输出存下来。
+要用统计能力，需要先把 Worker 迁过来并配置数据集。
 
 ## 签名
 
-Android 只接受和已装版本**同一签名**的覆盖安装。`build.gradle.kts` 从 `app/android/key.properties` 读取发布签名；配置缺失时回落到打包机器的 `~/.android/debug.keystore`，仅供本地构建。正式发版必须先配置发布密钥。
+Android 只接受和已装版本**同一签名**的覆盖安装。`build.gradle.kts` 从 `app/android/key.properties` 读取发布签名。
+
+### 现状（2026-11-20）
+
+`app/android/key.properties`（gitignore，不入库）已经指向 `~/keys/dsh-orb-release.jks`，别名 `dsh-orb`，证书 `CN=DSH Orb / O=DSH Orb / L=Beijing / C=CN`，SHA-256 指纹 `02:24:c1:2a:4d:1c:48:11:b0:f9:f2:d6:ca:75:0e:64:c7:13:9f:f6:65:92:bb:20:0a:e9:79:dd:dc:e9:7f:4b`。
+
+**这把钥匙必须离线备份。** 丢了以后所有已安装用户都无法覆盖升级，只能卸载重装（数据全清）。
+
+### 一个容易踩的坑：debug 构建也会用 release key
+
+`key.properties` 一旦存在，`build.gradle.kts` 里 `debug` buildType 也会继承 release 签名（见文件里的 `debug { signingConfig = ... }`）。后果是：
+
+- 用 `tooling/build-apk.sh --debug` 打出来的包**不能**覆盖安装到早先用系统 debug key（`54:9f:d6:...`）装的版本上，报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`；
+- 想保留数据原地升级，要么统一用 release key，要么临时把 `key.properties` 移走再打 debug 包。
+
+判断手机上是哪把 key：把已装的 APK 拉下来 `apksigner verify --print-certs` 比对指纹。
+
+### 首次生成发布密钥（新机器）
+
 
 做法：生成一把发布密钥，只在发版机器上用，并离线备份（丢了等于以后再也发不了更新，所有用户都得卸载重装）。
 
 ```sh
-keytool -genkeypair -v -keystore /home/you/keys/dsh-release.jks -keyalg RSA -keysize 4096 -validity 36500 -alias dsh
+keytool -genkeypair -v -keystore ~/keys/dsh-orb-release.jks -keyalg RSA -keysize 4096 -validity 36500 \
+  -alias dsh-orb -dname 'CN=DSH Orb, O=DSH Orb, L=Beijing, C=CN'
 ```
 
 `app/android/key.properties`（**加进 .gitignore，不要提交**）：
 
 ```properties
-storeFile=/home/you/keys/dsh-release.jks
+storeFile=/Users/<user>/keys/dsh-orb-release.jks
 storePassword=…
-keyAlias=dsh
+keyAlias=dsh-orb
 keyPassword=…
 ```
 
