@@ -52,7 +52,7 @@
          TODO(targetSdk >= 31): also configure dataExtractionRules. -->
     <application
         android:allowBackup="false"
-        android:label="DSH Go"
+        android:label="DSH Orb"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -169,7 +169,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="dshgo" />
+                <data android:scheme="dshorb" />
             </intent-filter>
             <!-- Opened from a file manager / chat app. (Shared ones come through ShareActivity:
                  one share target, not two.) -->

@@ -34,6 +34,15 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   /// How often the page re-checks a link the browser is holding.
   static const _linkPollInterval = Duration(seconds: 2);
 
+  /// Built-in default Mesh server for DSH Orb; users running a self-hosted
+  /// server can replace it in the address field at any time.
+  static const _fallbackDefaultServer = 'https://dshorb.top';
+
+  String _resolvedDefaultServer([MeshStatus? status]) {
+    final fromPlugin = (status ?? _status)?.defaultServer.trim() ?? '';
+    return fromPlugin.isNotEmpty ? fromPlugin : _fallbackDefaultServer;
+  }
+
   final _server = TextEditingController();
   final _expanded = <String>{};
   MeshStatus? _status;
@@ -99,8 +108,9 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         if (!quiet) _error = null;
         // Offer the deployment's server until the user types their own, but
         // never overwrite an address they are already editing.
-        if (!_serverTouched && _server.text.trim().isEmpty && status.defaultServer.isNotEmpty) {
-          _server.text = status.defaultServer;
+        final fallback = _resolvedDefaultServer(status);
+        if (!_serverTouched && _server.text.trim().isEmpty && fallback.isNotEmpty) {
+          _server.text = fallback;
         }
       });
     } catch (error) {
@@ -122,11 +132,11 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     return error.toString();
   }
 
-  /// The address the switch links against: what the user typed, or the one the
-  /// deployment bundled when the field is untouched.
+  /// The address the switch links against: what the user typed, or the default
+  /// server when the field is untouched.
   String get _targetServer {
     final typed = _server.text.trim();
-    return typed.isEmpty ? (_status?.defaultServer ?? '') : typed;
+    return typed.isEmpty ? _resolvedDefaultServer() : typed;
   }
 
   /// Flip the switch on: create the link, open the browser, then poll for the
@@ -329,7 +339,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
 
   Widget _joinCard(L10n l10n) {
     final linking = _link != null;
-    final defaultServer = _status?.defaultServer ?? '';
+    final defaultServer = _resolvedDefaultServer();
     return SettingsSection(
       title: l10n.meshJoinTitle,
       footer: Text(l10n.meshJoinHint),

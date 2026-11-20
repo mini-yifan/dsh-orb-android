@@ -6,7 +6,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../state/app_info.dart';
@@ -31,11 +30,10 @@ Uri? usageEndpointFrom(String text) {
   return uri.scheme == 'https' || (uri.scheme == 'http' && loopback) ? uri : null;
 }
 
-/// Whether this build counts and reports at all: release builds, and builds
-/// pointed at a test endpoint. Debug runs and tests stay out of the numbers
-/// (tests switch it on where they check it).
+/// Disabled in DSH Orb builds unless an explicit `DSH_USAGE_ENDPOINT` override
+/// is provided at build time (prevents reporting to upstream DSH Go servers).
 abstract final class UsageBuild {
-  static bool active = kReleaseMode || usageEndpointFrom(_endpointOverride) != null;
+  static bool active = usageEndpointFrom(_endpointOverride) != null;
 }
 
 /// One POST; a seam so tests never touch the network.

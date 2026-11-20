@@ -13,7 +13,6 @@ import '../../state/star_prompt.dart' show starLinkOpenerProvider;
 import '../../state/update_state.dart';
 import '../shell/brand_mark.dart';
 import '../shell/page_frame.dart';
-import '../star/star_prompt_dialog.dart' show openStarProject;
 import '../theme/app_icons.dart';
 import '../theme/theme.dart';
 import '../update/update_tiles.dart';
@@ -45,12 +44,13 @@ class AboutPage extends ConsumerWidget {
               value: Text(version, style: AppType.tabular(theme.textTheme.bodyMedium!)),
             ),
             const AppUpdateTiles(),
-            SettingsTile(
-              key: const ValueKey('settings-star'),
-              spot: Spots.star,
-              onTap: () => unawaited(
-                openStarProject(ProviderScope.containerOf(context, listen: false), ScaffoldMessenger.maybeOf(context)),
-              ),
+            _authorLink(
+              context,
+              ref,
+              'about-website',
+              'DSH Orb',
+              'dshorb.top',
+              AppInfo.websiteUrl,
             ),
             SettingsTile(
               spot: Spots.licenses,
@@ -61,29 +61,6 @@ class AboutPage extends ConsumerWidget {
                 applicationIcon: const Padding(padding: EdgeInsets.all(12), child: BrandMark(size: 56, tile: true)),
                 applicationLegalese: AppInfo.disclaimer,
               ),
-            ),
-          ],
-        ),
-        SettingsSection(
-          title: l10n.hubAboutAuthor,
-          children: [
-            const SettingsTile(title: AppInfo.author),
-            _authorLink(
-              context,
-              ref,
-              'about-author-bilibili',
-              l10n.hubAboutBilibili,
-              AppInfo.authorBilibiliName,
-              AppInfo.authorBilibiliUrl,
-            ),
-            _authorLink(context, ref, 'about-author-x', l10n.hubAboutX, AppInfo.authorXHandle, AppInfo.authorXUrl),
-            _authorLink(
-              context,
-              ref,
-              'about-author-github',
-              l10n.hubAboutGithub,
-              '@${AppInfo.author}',
-              AppInfo.authorGithubUrl,
             ),
           ],
         ),
@@ -101,6 +78,12 @@ class AboutPage extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 AppInfo.disclaimer,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(color: colors.textTertiary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Based on open-source DSH Go (AGPL-3.0)',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(color: colors.textTertiary),
               ),

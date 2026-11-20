@@ -1,4 +1,6 @@
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -7,10 +9,25 @@ import 'redact.dart';
 
 enum AppErrorSource { flutter, platform, session }
 
-/// A bounded, already-redacted record from this app process. It is not a
-/// persistent crash report, nor a listener for errors in other isolates.
+/// A bounded, already-redacted record from this app process (and persisted
+/// across restarts when [AppErrorLog.attachFile] is enabled).
 class AppErrorRecord {
   const AppErrorRecord({required this.at, required this.source, required this.message, required this.stack});
+
+  factory AppErrorRecord.fromJson(Map<String, Object?> json) {
+    final rawSource = json['source'];
+    final source = AppErrorSource.values.firstWhere(
+      (v) => v.name == rawSource,
+      orElse: () => AppErrorSource.flutter,
+    );
+    final parsedAt = json['at'] is String ? DateTime.tryParse(json['at']! as String) : null;
+    return AppErrorRecord(
+      at: parsedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      source: source,
+      message: json['message'] is String ? json['message']! as String : '',
+      stack: json['stack'] is String ? json['stack']! as String : '',
+    );
+  }
 
   final DateTime at;
   final AppErrorSource source;
@@ -26,18 +43,49 @@ class AppErrorRecord {
 }
 
 /// Records before delegating to the existing error handlers. Collection is
-/// synchronous and in memory: it performs no IO or connection/provider reads.
+/// synchronous; when [attachFile] is called, redacted JSONL lines are also
+/// persisted to disk so crashes survive an app restart.
 class AppErrorLog {
   AppErrorLog({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const maxRecords = 40;
+  static const maxFileBytes = 256 * 1024;
   static const maxMessageLength = 4000;
   static const maxStackLength = 8000;
   static const _maxInputLength = 16000;
 
   final DateTime Function() _clock;
   final Queue<AppErrorRecord> _records = Queue();
+  File? _file;
   bool _recording = false;
+
+  /// Loads previously persisted records (if any) and persists subsequent ones.
+  /// IO errors are swallowed so diagnostics never interfere with app startup.
+  void attachFile(File file) {
+    _file = file;
+    try {
+      if (!file.existsSync()) return;
+      final existing = <AppErrorRecord>[];
+      for (final line in file.readAsLinesSync()) {
+        if (line.trim().isEmpty) continue;
+        try {
+          final decoded = jsonDecode(line);
+          if (decoded is Map<String, Object?>) {
+            existing.add(AppErrorRecord.fromJson(decoded));
+          }
+        } catch (_) {
+          // Ignore malformed lines.
+        }
+      }
+      final combined = [...existing, ..._records];
+      final keep = combined.length > maxRecords ? combined.sublist(combined.length - maxRecords) : combined;
+      _records
+        ..clear()
+        ..addAll(keep);
+    } catch (_) {
+      // Never fail startup on diagnostics IO.
+    }
+  }
 
   List<AppErrorRecord> snapshot() => List.unmodifiable(_records);
 
@@ -55,10 +103,27 @@ class AppErrorLog {
       );
       if (_records.length == maxRecords) _records.removeFirst();
       _records.addLast(record);
+      _persist(record);
     } catch (_) {
       // Diagnostics must not replace the error being reported with its own.
     } finally {
       _recording = false;
+    }
+  }
+
+  void _persist(AppErrorRecord record) {
+    final file = _file;
+    if (file == null) return;
+    try {
+      file.parent.createSync(recursive: true);
+      if (file.existsSync() && file.lengthSync() > maxFileBytes) {
+        final lines = _records.map((r) => jsonEncode(r.toJson())).join('\n');
+        file.writeAsStringSync('$lines\n', flush: true);
+      } else {
+        file.writeAsStringSync('${jsonEncode(record.toJson())}\n', mode: FileMode.append, flush: true);
+      }
+    } catch (_) {
+      // Ignore disk IO failures.
     }
   }
 

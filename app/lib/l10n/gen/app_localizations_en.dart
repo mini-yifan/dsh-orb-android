@@ -21,10 +21,10 @@ class L10nEn extends L10n {
 
   @override
   String get a11yRestoreNotice =>
-      'Once authorized, accessibility will be turned back on if disabled in system settings. To stop phone control, turn it off in DSH Go.';
+      'Once authorized, accessibility will be turned back on if disabled in system settings. To stop phone control, turn it off in DSH Orb.';
 
   @override
-  String get a11yRestoreForceStop => 'After a force stop, reopen DSH Go to restore the service.';
+  String get a11yRestoreForceStop => 'After a force stop, reopen DSH Orb to restore the service.';
 
   @override
   String get a11yRestoreGrant => 'Authorize and enable';
@@ -60,7 +60,7 @@ class L10nEn extends L10n {
   String get a11yRestoreCopied => 'Command copied';
 
   @override
-  String get accessPickTitle => 'What should DSH Go help with?';
+  String get accessPickTitle => 'What should DSH Orb help with?';
 
   @override
   String get accessPickMessage => 'Pick any, then turn each one on';
@@ -177,7 +177,7 @@ class L10nEn extends L10n {
   String get accessAutostartTitle => 'Allow auto-start';
 
   @override
-  String get accessAutostartWhy => 'Lets DSH Go come back after the system clears it';
+  String get accessAutostartWhy => 'Lets DSH Orb come back after the system clears it';
 
   @override
   String accessVivoAutostartPath(String app) {
@@ -199,7 +199,7 @@ class L10nEn extends L10n {
   String get accessPopupTitle => 'Allow pop-ups in background';
 
   @override
-  String get accessPopupWhy => 'Brings you back to DSH Go when phone control is done';
+  String get accessPopupWhy => 'Brings you back to DSH Orb when phone control is done';
 
   @override
   String accessVivoPopupPath(String app) {
@@ -2762,7 +2762,7 @@ class L10nEn extends L10n {
   String get botsForumSubtitle => 'Ask, share, connect';
 
   @override
-  String get botsProjectHome => 'DSH Go project home';
+  String get botsProjectHome => 'DSH Orb project home';
 
   @override
   String get botsOpenSource => 'Open-source project';
@@ -6163,7 +6163,7 @@ class L10nEn extends L10n {
   String get engineAccountFinishInBrowser => 'Finish sign-in in your browser';
 
   @override
-  String get engineAccountReturnToDsh => 'Return to DSH Go after signing in';
+  String get engineAccountReturnToDsh => 'Return to DSH Orb after signing in';
 
   @override
   String get engineAccountFinishingSignIn => 'Finishing sign-in';
@@ -8680,7 +8680,7 @@ class L10nEn extends L10n {
 
   @override
   String get hubSettingsStorageDenied =>
-      'Storage access wasn’t granted. Allow “All files access” for DSH Go in system settings, then try again.';
+      'Storage access wasn’t granted. Allow “All files access” for DSH Orb in system settings, then try again.';
 
   @override
   String get hubSettingsRestartRequired => 'Takes effect after restarting the engine';
@@ -9073,10 +9073,10 @@ class L10nEn extends L10n {
   String get hubTableTintNoneHint => 'Grid lines only, the lightest';
 
   @override
-  String get hubAbout => 'About DSH Go';
+  String get hubAbout => 'About DSH Orb';
 
   @override
-  String get hubAboutAuthor => 'Original author of DSH Go';
+  String get hubAboutAuthor => 'Original author of DSH Orb';
 
   @override
   String get hubAboutBilibili => 'Bilibili profile';
@@ -9247,7 +9247,7 @@ class L10nEn extends L10n {
 
   @override
   String get iconShortcutNote =>
-      'Android doesn’t let an app use any picture as its icon, so this adds a separate shortcut that opens DSH Go. Some home screens put a small badge on its corner.';
+      'Android doesn’t let an app use any picture as its icon, so this adds a separate shortcut that opens DSH Orb. Some home screens put a small badge on its corner.';
 
   @override
   String get iconShortcutAdded => 'Added to your home screen';
@@ -9256,7 +9256,7 @@ class L10nEn extends L10n {
   String get iconShortcutConfirm => 'Confirm in the dialog that appears';
 
   @override
-  String get iconShortcutNoDialog => 'No dialog? Allow DSH Go to create home screen shortcuts in system settings.';
+  String get iconShortcutNoDialog => 'No dialog? Allow DSH Orb to create home screen shortcuts in system settings.';
 
   @override
   String get iconShortcutSettings => 'Settings';
@@ -9350,11 +9350,11 @@ class L10nEn extends L10n {
   String get liveUnsupported => 'This phone\'s system doesn\'t support live activities yet';
 
   @override
-  String get liveBlockedTitle => 'Live activities are off for DSH Go';
+  String get liveBlockedTitle => 'Live activities are off for DSH Orb';
 
   @override
   String get liveBlockedText =>
-      'Turn on live activities for DSH Go in system settings (some phones call it “Show on Live Alerts”)';
+      'Turn on live activities for DSH Orb in system settings (some phones call it “Show on Live Alerts”)';
 
   @override
   String get localeTitle => 'Language';
@@ -10533,7 +10533,7 @@ class L10nEn extends L10n {
   String get phoneEngineLogs => 'Logs';
 
   @override
-  String get phoneEngineAutoStart => 'Start when DSH Go opens';
+  String get phoneEngineAutoStart => 'Start when DSH Orb opens';
 
   @override
   String get phoneEngineKeepAlive => 'Background running';
@@ -10817,7 +10817,7 @@ class L10nEn extends L10n {
 
   @override
   String get phoneDndShizukuPermissionFailed =>
-      'Permission not granted. Allow DSH Go in Shizuku’s “Application management”.';
+      'Permission not granted. Allow DSH Orb in Shizuku’s “Application management”.';
 
   @override
   String get phoneDndPairedConnect => 'Paired. Tap “Connect”.';
@@ -10923,11 +10923,11 @@ class L10nEn extends L10n {
 
   @override
   String get phoneDndRootConnected =>
-      'Root is connected. If it drops, choose it here again; DSH Go asks for root on its own only with “Keep root channel” on above.';
+      'Root is connected. If it drops, choose it here again; DSH Orb asks for root on its own only with “Keep root channel” on above.';
 
   @override
   String get phoneDndRootConnectedKept =>
-      'Root is connected. If it drops, DSH Go asks your root manager again on its own.';
+      'Root is connected. If it drops, DSH Orb asks your root manager again on its own.';
 
   @override
   String get phoneDndRootRetry => 'Ask for root again';
@@ -10944,10 +10944,10 @@ class L10nEn extends L10n {
       'Open Shizuku and follow “Start via Wireless debugging” (requires Wi-Fi). This page refreshes when you return.';
 
   @override
-  String get phoneDndGrantShizukuHint => 'Shizuku is running. Allow DSH Go to use it next.';
+  String get phoneDndGrantShizukuHint => 'Shizuku is running. Allow DSH Orb to use it next.';
 
   @override
-  String get phoneDndGrantShizuku => 'Allow DSH Go';
+  String get phoneDndGrantShizuku => 'Allow DSH Orb';
 
   @override
   String get phoneDndShizukuAllSet => 'Shizuku is ready.';
@@ -10959,7 +10959,7 @@ class L10nEn extends L10n {
   String get phoneDndShizukuRunning => 'Shizuku running';
 
   @override
-  String get phoneDndShizukuGranted => 'DSH Go allowed';
+  String get phoneDndShizukuGranted => 'DSH Orb allowed';
 
   @override
   String get phoneDndShizukuCompatibility =>
@@ -11073,7 +11073,7 @@ class L10nEn extends L10n {
   String get phoneOpenAccessibilityFailed => 'Can’t open settings. Find DSH in Settings → Accessibility.';
 
   @override
-  String get phoneOpenAppInfoFailed => 'Can’t open app info. Find DSH Go in Settings → Apps.';
+  String get phoneOpenAppInfoFailed => 'Can’t open app info. Find DSH Orb in Settings → Apps.';
 
   @override
   String get phoneStopFailed => 'Couldn’t stop. Tap “Stop” on the floating bar or notification.';
@@ -11317,14 +11317,14 @@ class L10nEn extends L10n {
 
   @override
   String get phoneRestrictedTryOverlay =>
-      'First try turning on DSH Go in floating window settings. When “Restricted setting” appears, tap “OK”. The option below appears only after this step.';
+      'First try turning on DSH Orb in floating window settings. When “Restricted setting” appears, tap “OK”. The option below appears only after this step.';
 
   @override
-  String get phoneRestrictedBackOverlay => 'Return to floating window settings and turn on DSH Go.';
+  String get phoneRestrictedBackOverlay => 'Return to floating window settings and turn on DSH Orb.';
 
   @override
   String get phoneRestrictedHuaweiOverlay =>
-      'HarmonyOS 4 and earlier usually skip this step. Turn on DSH Go directly in floating window settings.';
+      'HarmonyOS 4 and earlier usually skip this step. Turn on DSH Orb directly in floating window settings.';
 
   @override
   String get phoneRestrictedHuaweiAccessibility =>
@@ -11844,7 +11844,7 @@ class L10nEn extends L10n {
   String get phoneControlEnabledPending => 'On · Takes effect when the engine starts';
 
   @override
-  String get phoneReturnAfterDone => 'Back to DSH Go when done';
+  String get phoneReturnAfterDone => 'Back to DSH Orb when done';
 
   @override
   String get phoneReturnAfterDoneHint => 'Closes the bar, opens the chat';
@@ -12346,15 +12346,15 @@ class L10nEn extends L10n {
 
   @override
   String get phoneBackgroundGuideBody =>
-      'When a step needs your decision, a DSH Go card appears. If the card is unavailable, the app tries a notification or returns here. Allow phone-control notifications and pop-up alerts in system settings.';
+      'When a step needs your decision, a DSH Orb card appears. If the card is unavailable, the app tries a notification or returns here. Allow phone-control notifications and pop-up alerts in system settings.';
 
   @override
   String get phoneBackgroundOemHint =>
-      'In the system permissions for DSH Go, check “Display pop-up windows while running in the background”, if available. Allowing it can help the app return automatically. Menu names vary by system version.';
+      'In the system permissions for DSH Orb, check “Display pop-up windows while running in the background”, if available. Allowing it can help the app return automatically. Menu names vary by system version.';
 
   @override
   String get phoneBackgroundReturnHint =>
-      'If the app does not return when a task finishes, tap “Task complete · View result”. If system notifications or background windows are blocked, you may need to open DSH Go yourself.';
+      'If the app does not return when a task finishes, tap “Task complete · View result”. If system notifications or background windows are blocked, you may need to open DSH Orb yourself.';
 
   @override
   String get phoneBackgroundGotIt => 'Got it';
@@ -12367,7 +12367,7 @@ class L10nEn extends L10n {
 
   @override
   String get phonePrivilegedUpgrade =>
-      'This app build does not support that privileged channel. Update DSH Go to use it.';
+      'This app build does not support that privileged channel. Update DSH Orb to use it.';
 
   @override
   String get phonePrivilegedSui => 'Sui';
@@ -12402,11 +12402,11 @@ class L10nEn extends L10n {
   String get phonePrivilegedSuggested => 'Suggested';
 
   @override
-  String get phonePrivilegedRootRiskTitle => 'Give DSH Go root access?';
+  String get phonePrivilegedRootRiskTitle => 'Give DSH Orb root access?';
 
   @override
   String get phonePrivilegedRootRiskBody =>
-      'Your root manager (Magisk, KernelSU or APatch) will ask you. If you allow it, DSH Go runs its own background service as root. It asks again on its own after a disconnect or restart only with “Keep root channel” on.';
+      'Your root manager (Magisk, KernelSU or APatch) will ask you. If you allow it, DSH Orb runs its own background service as root. It asks again on its own after a disconnect or restart only with “Keep root channel” on.';
 
   @override
   String get phoneGateCleanupTitle => 'Probe cleanup not confirmed';
@@ -12442,15 +12442,15 @@ class L10nEn extends L10n {
 
   @override
   String get phoneKeepRootDescription =>
-      'After a drop, an app restart or a reboot, DSH Go asks your root manager again by itself. The manager still decides.';
+      'After a drop, an app restart or a reboot, DSH Orb asks your root manager again by itself. The manager still decides.';
 
   @override
   String get phoneKeepSharedDescription =>
-      'After a drop, an app restart or a reboot, DSH Go reconnects with the permission it already has. It never asks for permission.';
+      'After a drop, an app restart or a reboot, DSH Orb reconnects with the permission it already has. It never asks for permission.';
 
   @override
   String get phoneKeepAdbDescription =>
-      'After a drop, an app restart or a reboot, DSH Go reconnects over Wi‑Fi with the existing pairing. With the permission from “Restore accessibility automatically”, it also tries once to turn on wireless debugging.';
+      'After a drop, an app restart or a reboot, DSH Orb reconnects over Wi‑Fi with the existing pairing. With the permission from “Restore accessibility automatically”, it also tries once to turn on wireless debugging.';
 
   @override
   String get phoneKeepRestoring => 'Reconnecting';
@@ -12618,7 +12618,7 @@ class L10nEn extends L10n {
 
   @override
   String get phoneModeAutoNote =>
-      'System settings and permission pages, passwords and verification codes, and DSH Go itself stay with you. Banking and payment apps are off limits by default; you can change that in Settings.';
+      'System settings and permission pages, passwords and verification codes, and DSH Orb itself stay with you. Banking and payment apps are off limits by default; you can change that in Settings.';
 
   @override
   String get phoneModeAutoUnlockNote =>
@@ -12637,7 +12637,7 @@ class L10nEn extends L10n {
   String get phoneYoursSecrets => 'Passwords and verification codes';
 
   @override
-  String get phoneYoursOwnApp => 'DSH Go itself';
+  String get phoneYoursOwnApp => 'DSH Orb itself';
 
   @override
   String get phoneYoursDenyList => 'Apps set to Hands off in App rules, banking and payment by default';
@@ -12661,10 +12661,10 @@ class L10nEn extends L10n {
   String get phoneUnlockSecretsHint => 'Fill in passwords, verification and payment codes';
 
   @override
-  String get phoneUnlockOwnApp => 'DSH Go itself';
+  String get phoneUnlockOwnApp => 'DSH Orb itself';
 
   @override
-  String get phoneUnlockOwnAppHint => 'Tap and type inside DSH Go';
+  String get phoneUnlockOwnAppHint => 'Tap and type inside DSH Orb';
 
   @override
   String get phoneUnlockBusy => 'Can’t turn on while a task is running';
@@ -12697,7 +12697,7 @@ class L10nEn extends L10n {
   String get phoneUnlockConfirmSecretsTitle => 'Let AI fill in passwords and codes?';
 
   @override
-  String get phoneUnlockConfirmOwnAppTitle => 'Let AI operate DSH Go itself?';
+  String get phoneUnlockConfirmOwnAppTitle => 'Let AI operate DSH Orb itself?';
 
   @override
   String get phoneUnlockCanTitle => 'Once on, AI can';
@@ -12743,10 +12743,10 @@ class L10nEn extends L10n {
   String get phoneUnlockSecretsRisk2 => 'It could complete a payment or transfer you didn’t intend';
 
   @override
-  String get phoneUnlockOwnAppCan1 => 'Tap and type inside DSH Go, including changing settings';
+  String get phoneUnlockOwnAppCan1 => 'Tap and type inside DSH Orb, including changing settings';
 
   @override
-  String get phoneUnlockOwnAppCan2 => 'Read conversations and settings on DSH Go’s screens';
+  String get phoneUnlockOwnAppCan2 => 'Read conversations and settings on DSH Orb’s screens';
 
   @override
   String get phoneUnlockOwnAppRisk1 =>
@@ -12763,7 +12763,7 @@ class L10nEn extends L10n {
 
   @override
   String get phoneUnlockDisclaimer3 =>
-      'Any resulting loss to your accounts, money, data or device is yours to bear. DSH Go and its developers accept no liability.';
+      'Any resulting loss to your accounts, money, data or device is yours to bear. DSH Orb and its developers accept no liability.';
 
   @override
   String get phoneUnlockDisclaimer4 => 'Turn it on only when you need it, and off when you’re done.';
@@ -13248,7 +13248,7 @@ class L10nEn extends L10n {
   String get pluginsFileWriteFailed => 'Couldn’t write the file';
 
   @override
-  String get pluginsProfileTitle => 'DSH Go settings';
+  String get pluginsProfileTitle => 'DSH Orb settings';
 
   @override
   String get pluginsGistTokenInvalid => 'GitHub token is invalid or lacks Gist permission';
@@ -13846,7 +13846,7 @@ class L10nEn extends L10n {
 
   @override
   String get pluginsNotificationSettingsFailed =>
-      'Couldn’t open system settings. Turn on notifications in Settings → Apps → DSH Go → Notifications.';
+      'Couldn’t open system settings. Turn on notifications in Settings → Apps → DSH Orb → Notifications.';
 
   @override
   String get pluginsSystemNotificationsOff => 'System notifications are off';
@@ -14124,7 +14124,7 @@ class L10nEn extends L10n {
   String get pluginsShareOpenFailed => 'Couldn’t open this share code';
 
   @override
-  String get pluginsPluginShareTitle => 'DSH Go plugin';
+  String get pluginsPluginShareTitle => 'DSH Orb plugin';
 
   @override
   String get pluginsShareSheetOpenFailed => 'Couldn’t open sharing';
@@ -14401,7 +14401,7 @@ class L10nEn extends L10n {
 
   @override
   String plugslotsIssueNeedsApp(String version) {
-    return 'Needs DSH Go $version or later';
+    return 'Needs DSH Orb $version or later';
   }
 
   @override
@@ -14844,7 +14844,7 @@ class L10nEn extends L10n {
   String get remoteErrHostNotOwned => 'Host isn’t in your DSH Remote account';
 
   @override
-  String get remoteErrUpdateNeeded => 'Version mismatch. Update DSH Go and the host’s remote plugin';
+  String get remoteErrUpdateNeeded => 'Version mismatch. Update DSH Orb and the host’s remote plugin';
 
   @override
   String get remoteErrVersionIncompatible => 'Update DSH or the remote plugin on the host';
@@ -16345,7 +16345,7 @@ class L10nEn extends L10n {
 
   @override
   String get remotePairNeedsDeepSeekBody =>
-      'Pairing needs the DeepSeek account signed in on DSH Go. Only its account ID goes along, to label this phone; no password, cookie or token.';
+      'Pairing needs the DeepSeek account signed in on DSH Orb. Only its account ID goes along, to label this phone; no password, cookie or token.';
 
   @override
   String get remotePairScanHint => 'Point the camera at the pairing code the Remote plugin shows on your computer';
@@ -16437,7 +16437,7 @@ class L10nEn extends L10n {
 
   @override
   String remotePairOtherServerBody(String server) {
-    return 'This code is from $server, not the Remote server DSH Go uses now. Switch to it and continue? Each server keeps its own sign-in.';
+    return 'This code is from $server, not the Remote server DSH Orb uses now. Switch to it and continue? Each server keeps its own sign-in.';
   }
 
   @override
@@ -16447,7 +16447,7 @@ class L10nEn extends L10n {
   String get remotePairScanAgain => 'Scan again';
 
   @override
-  String get remotePairErrInvalidCode => 'That isn’t a DSH Go pairing code';
+  String get remotePairErrInvalidCode => 'That isn’t a DSH Orb pairing code';
 
   @override
   String get remotePairErrOtherServer => 'This code is from another Remote server';
@@ -16550,7 +16550,7 @@ class L10nEn extends L10n {
 
   @override
   String get riskPetOverlayBody =>
-      'Turn on “Display over other apps” for DSH Go in system settings so your pet can appear outside the app.';
+      'Turn on “Display over other apps” for DSH Orb in system settings so your pet can appear outside the app.';
 
   @override
   String get riskPetOverlayAction => 'Open settings';
@@ -16566,19 +16566,19 @@ class L10nEn extends L10n {
 
   @override
   String askAiAboutApp(String question) {
-    return 'About the DSH Go app: $question';
+    return 'About the DSH Orb app: $question';
   }
 
   @override
   String askAiWithGuide(String question) {
-    return 'About the DSH Go app: $question\nPlease answer from the attached guide.';
+    return 'About the DSH Orb app: $question\nPlease answer from the attached guide.';
   }
 
   @override
-  String get askAiNoGuide => 'This host doesn’t have the DSH Go guide, so answers may be off';
+  String get askAiNoGuide => 'This host doesn’t have the DSH Orb guide, so answers may be off';
 
   @override
-  String get askAiQuestionOverview => 'What can DSH Go do, and where should I start?';
+  String get askAiQuestionOverview => 'What can DSH Orb do, and where should I start?';
 
   @override
   String get askAiQuestionPhoneControl => 'How does phone control work, and what are the risks?';
@@ -18062,7 +18062,7 @@ class L10nEn extends L10n {
 
   @override
   String shellSkillInstallPrompt(String skill) {
-    return 'Install the DSH Go interface skill $skill on this host:';
+    return 'Install the DSH Orb interface skill $skill on this host:';
   }
 
   @override
@@ -18210,16 +18210,16 @@ class L10nEn extends L10n {
     String _temp0 = intl.Intl.pluralLogic(
       hours,
       locale: localeName,
-      other: 'I’ve kept you company in DSH Go for $hours hours now~',
-      one: 'I’ve kept you company in DSH Go for an hour now~',
-      zero: 'I’ve kept you company in DSH Go for half an hour now~',
+      other: 'I’ve kept you company in DSH Orb for $hours hours now~',
+      one: 'I’ve kept you company in DSH Orb for an hour now~',
+      zero: 'I’ve kept you company in DSH Orb for half an hour now~',
     );
     return '$_temp0';
   }
 
   @override
   String get starPromptBody =>
-      'DSH Go is free and open source. If it’s made your phone a little nicer to use, please give it a Star — it means so much to this little whale!';
+      'DSH Orb is free and open source. If it’s made your phone a little nicer to use, please give it a Star — it means so much to this little whale!';
 
   @override
   String get starPromptPlea => 'Pretty please~ It really matters!!';
@@ -18234,7 +18234,7 @@ class L10nEn extends L10n {
   String get starPromptLater => 'Maybe later';
 
   @override
-  String get starSettingsTitle => 'Star DSH Go on GitHub';
+  String get starSettingsTitle => 'Star DSH Orb on GitHub';
 
   @override
   String get phoneStartupFailureStopping => 'Startup failed; stopping';
@@ -18253,7 +18253,7 @@ class L10nEn extends L10n {
       'The startup token arrived, but the local service port did not become ready. Check the logs.';
 
   @override
-  String get stateDiagnosticsSubject => 'DSH Go diagnostics bundle';
+  String get stateDiagnosticsSubject => 'DSH Orb diagnostics bundle';
 
   @override
   String get stateStoragePermission => 'No storage permission to save to Downloads';
@@ -19641,7 +19641,7 @@ class L10nEn extends L10n {
 
   @override
   String get updateSettingsOpenFailedMessage =>
-      'Allow “Install unknown apps” in Settings → Apps → DSH Go, then return to install.';
+      'Allow “Install unknown apps” in Settings → Apps → DSH Orb, then return to install.';
 
   @override
   String get updateInstallCancelled => 'Installation cancelled';
@@ -19661,7 +19661,7 @@ class L10nEn extends L10n {
 
   @override
   String get updateSignatureMismatchMessage =>
-      'The DSH Go on your phone has a different signature (usually a test build). Uninstall it before installing this version. Uninstalling erases your chats, Linux environment, and settings.';
+      'The DSH Orb on your phone has a different signature (usually a test build). Uninstall it before installing this version. Uninstalling erases your chats, Linux environment, and settings.';
 
   @override
   String get updateWrongPackage => 'This isn’t a DSH package';
@@ -19726,7 +19726,7 @@ class L10nEn extends L10n {
   String get updateNoReleaseNotes => 'No release notes for this version.';
 
   @override
-  String get updateInstallKeepsData => 'DSH Go closes to install. Your chats and settings stay.';
+  String get updateInstallKeepsData => 'DSH Orb closes to install. Your chats and settings stay.';
 
   @override
   String get updateNoCompatiblePackage => 'No package for this phone';
@@ -19761,7 +19761,7 @@ class L10nEn extends L10n {
   String get updateReadyToInstall => 'Verified and ready to install.';
 
   @override
-  String get updateAllowInstall => 'Allow DSH Go to install apps';
+  String get updateAllowInstall => 'Allow DSH Orb to install apps';
 
   @override
   String get updateAllowInstallMessage =>
@@ -19817,7 +19817,7 @@ class L10nEn extends L10n {
   String get usageStatsTitle => 'Send anonymous usage stats';
 
   @override
-  String get usageStatsSection => 'Improve DSH Go';
+  String get usageStatsSection => 'Improve DSH Orb';
 
   @override
   String get usageStatsFooter =>
@@ -19827,7 +19827,7 @@ class L10nEn extends L10n {
   String get usageNoticeBody => 'No chats or personal info.\nTurn off anytime.';
 
   @override
-  String get usageUpgradeNotice => 'New: anonymous usage stats, to help improve DSH Go.\nNo chats or personal info.';
+  String get usageUpgradeNotice => 'New: anonymous usage stats, to help improve DSH Orb.\nNo chats or personal info.';
 
   @override
   String get usageUpgradeLearn => 'Learn more';
@@ -19972,7 +19972,7 @@ class L10nEn extends L10n {
   String get viewBalanceNoAlert => 'Off';
 
   @override
-  String get viewBalanceBannerHidden => 'Balance alert hidden until DSH Go restarts';
+  String get viewBalanceBannerHidden => 'Balance alert hidden until DSH Orb restarts';
 
   @override
   String get viewBalanceTurnOff => 'Turn off';
@@ -20585,7 +20585,7 @@ class L10nEn extends L10n {
   String get viewTipKeyboard => 'With a keyboard: Ctrl+Enter sends, Esc twice stops';
 
   @override
-  String get viewTipShareIn => 'Share text or images to DSH Go from another app to start a new chat with them';
+  String get viewTipShareIn => 'Share text or images to DSH Orb from another app to start a new chat with them';
 
   @override
   String get viewTipShareSelect => 'When sharing a chat, long-press and slide to pick several messages at once';
@@ -20826,7 +20826,7 @@ class L10nEn extends L10n {
 
   @override
   String viewContinueHeader(String value) {
-    return '> Shared DSH Go chat · $value\n';
+    return '> Shared DSH Orb chat · $value\n';
   }
 
   @override
@@ -20881,7 +20881,7 @@ class L10nEn extends L10n {
 
   @override
   String viewShareLinkText(String first, String second) {
-    return '“$first” · DSH Go chat\n$second';
+    return '“$first” · DSH Orb chat\n$second';
   }
 
   @override
@@ -20900,7 +20900,7 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get viewShareFileHint => 'Replay and continue in DSH Go';
+  String get viewShareFileHint => 'Replay and continue in DSH Orb';
 
   @override
   String get viewShareWebHint => 'Opens in any browser, even offline';

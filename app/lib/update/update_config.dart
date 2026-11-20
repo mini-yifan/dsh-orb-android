@@ -20,32 +20,29 @@
 ///   replaces the public GitHub accelerator list (empty string = none).
 library;
 
-/// GitHub repository the releases live in.
-const updateRepo = 'ccch1mneyyy/dsh-go';
+/// Repository identifier for DSH Orb releases.
+const updateRepo = 'mini-yifan/dsh-orb-android';
 
-/// `releases/latest` of the REST API: tag, notes, assets with sizes and
-/// SHA-256 digests. Unauthenticated: 60 requests per hour per IP.
+/// `releases/latest` of the REST API (disabled by default for DSH Orb; updates
+/// come from [updateDownloadOrigin]).
 final githubLatestApi = Uri.parse('https://api.github.com/repos/$updateRepo/releases/latest');
 
-/// The latest release's page, for "open in browser".
-final githubReleasesPage = Uri.parse('https://github.com/$updateRepo/releases/latest');
+/// The download / release landing page opened in the browser.
+final githubReleasesPage = Uri.parse('https://dshorb.top');
 
-/// A file attached to the latest release. github.com redirects to the asset
-/// CDN; not rate limited like the API and reachable through download mirrors.
+/// A file attached to the latest release.
 Uri githubLatestAsset(String name) => Uri.parse('https://github.com/$updateRepo/releases/latest/download/$name');
 
 /// A file attached to the release tagged [tag].
 Uri githubReleaseAsset(String tag, String name) =>
     Uri.parse('https://github.com/$updateRepo/releases/download/$tag/$name');
 
-/// The share host (services/share-worker). It serves the beta channel under
-/// `/beta/`; public files come from [updateDownloadOrigin].
-const updateMirrorOrigin = 'https://go.dshtui.com';
+/// Optional channel host for DSH Orb.
+const updateMirrorOrigin = 'https://dshorb.top';
 
-/// Our public copy of the release files (an R2 bucket): `/update.json`, the
-/// latest public manifest with absolute asset URLs, and
-/// `/download/<version>/<file>` for every file of every release.
-const updateDownloadOrigin = 'https://dl.dshtui.com';
+/// DSH Orb's self-hosted update origin: `/update.json` and
+/// `/download/<version>/<file>` under `https://dshorb.top/app`.
+const updateDownloadOrigin = 'https://dshorb.top/app';
 
 /// The beta channel: `<origin>/beta/update.json` and `<origin>/beta/<version>/<file>`,
 /// both behind `Authorization: Bearer <token>`. The token is compiled into beta
@@ -134,15 +131,9 @@ class UpdateMirror {
   }
 }
 
-/// Public GitHub accelerators, tried in order after our copy and GitHub
-/// itself. They come and go (domains change every few months, and some answer
-/// 403 to whole networks); everything they serve is checked against the
-/// release's SHA-256 and, at install time, against the installed app's
-/// signing key.
-const publicMirrors = [
-  UpdateMirror(id: 'ghfast', label: 'ghfast.top', prefix: 'https://ghfast.top/'),
-  UpdateMirror(id: 'gh-proxy', label: 'gh-proxy.com', prefix: 'https://gh-proxy.com/'),
-];
+/// DSH Orb updates come solely from [updateDownloadOrigin] (`dshorb.top/app`);
+/// no third-party GitHub accelerators are bundled.
+const publicMirrors = <UpdateMirror>[];
 
 const _unset = '\u0000';
 const _mirrorDefine = String.fromEnvironment('DSH_UPDATE_MIRROR', defaultValue: updateDownloadOrigin);
@@ -161,16 +152,16 @@ UpdateSources defaultUpdateSources() => buildUpdateSources(
 );
 
 /// [defaultUpdateSources] from the defines' values: [mirror] is the origin of
-/// a copy of the release files ('' = none); [feed] another manifest to ask
-/// (null = the mirror's, '' = none); [accelerators] a comma list replacing
-/// [publicMirrors] (null = keep them); [channelToken] turns on the beta
-/// channel at [channelOrigin] ('' = off).
+/// DSH Orb's self-hosted update files ('' = none); [feed] another manifest to ask
+/// (null = the mirror's, '' = none); [accelerators] an optional comma list of
+/// mirror prefixes; [channelToken] turns on the beta channel at [channelOrigin].
 UpdateSources buildUpdateSources({
   String mirror = updateDownloadOrigin,
   String? feed,
   String? accelerators,
   String channelToken = '',
   String channelOrigin = updateMirrorOrigin,
+  bool useGithubApi = false,
 }) {
   final origin = mirror.trim().replaceFirst(RegExp(r'/+$'), '');
   final own = origin.isEmpty ? null : UpdateMirror.selfHosted(origin);
@@ -184,7 +175,8 @@ UpdateSources buildUpdateSources({
   return UpdateSources(
     channel: UpdateChannel.tryCreate(token: channelToken, origin: channelOrigin),
     feed: feedUrl.isEmpty ? null : Uri.tryParse(feedUrl),
-    mirrors: [?own, UpdateMirror.github, ...public],
+    useGithubApi: useGithubApi,
+    mirrors: [?own, ...public],
   );
 }
 

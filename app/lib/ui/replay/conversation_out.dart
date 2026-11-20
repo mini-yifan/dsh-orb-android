@@ -16,7 +16,6 @@ import '../../share_code/conversation_html.dart';
 import '../../share_code/conversation_share.dart' show prefixKeepingPairs;
 import '../../share_code/share_codec.dart' show shareFileExtension, shareFileMime;
 import '../../share_hosted/hosted_client.dart' show HostedShareException;
-import '../share_hosted/hosted_link_maker.dart' show hostedConversationLinkMaker;
 import '../../state/artifacts.dart' show FilesChannel, filesChannelProvider;
 
 /// 「我的分享链接」 for the share panel's link page.
@@ -177,7 +176,9 @@ abstract class ConversationLinkMaker {
   Duration get undoWindow;
 }
 
-final conversationLinkMakerProvider = Provider<ConversationLinkMaker?>(hostedConversationLinkMaker);
+/// Hosted share links are disabled in DSH Orb (users share locally via image,
+/// file, or plain text).
+final conversationLinkMakerProvider = Provider<ConversationLinkMaker?>((_) => null);
 
 /// The bytes a link maker uploads.
 Uint8List conversationFileBytes(String fileText) => Uint8List.fromList(utf8.encode(fileText));

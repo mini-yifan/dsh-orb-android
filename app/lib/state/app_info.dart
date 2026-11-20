@@ -6,7 +6,7 @@ import '../l10n/l10n.dart';
 /// constant kept in sync with `pubspec.yaml` (`version: 1.0.2+1`). Release builds can
 /// override it: `flutter build apk --dart-define=DSH_APP_VERSION=1.2.0+7`.
 abstract final class AppInfo {
-  static const version = String.fromEnvironment('DSH_APP_VERSION', defaultValue: '1.0.2+1');
+  static const version = String.fromEnvironment('DSH_APP_VERSION', defaultValue: '0.1.0+1');
 
   /// "1.0.0 (1)" for display.
   static String get displayVersion {
@@ -16,11 +16,14 @@ abstract final class AppInfo {
 
   /// The app's name as the phone shows it: launcher, Recents, notifications, system
   /// settings, the licence page. Matches `android:label` in AndroidManifest.xml.
-  static const name = 'DSH Go';
+  static const name = 'DSH Orb';
 
   /// The in-app wordmark: the drawer's lockup, the welcome page and the brand mark's
   /// spoken label.
-  static const wordmark = 'DSH';
+  static const wordmark = 'DSH Orb';
+
+  /// Official website for DSH Orb (download, updates, and default Mesh server).
+  static const websiteUrl = 'https://dshorb.top';
 
   /// Required wording: the app is built on DSH but is not an official DeepSeek product.
   /// Shown on the About and licence pages.

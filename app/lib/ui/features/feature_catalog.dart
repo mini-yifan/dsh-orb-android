@@ -322,21 +322,6 @@ final featureSections = <FeatureSection>[
   ]),
   FeatureSection.localized((l10n) => l10n.catalogCommunitySharingSection, [
     FeatureItem.localized(
-      id: 'forum',
-      title: (l10n) => l10n.catalogForum,
-      summary: (l10n) => l10n.catalogForumSummary,
-      icon: AppIcons.forum,
-      native: (_) => const ForumHomePage(),
-    ),
-    FeatureItem.localized(
-      id: 'community',
-      title: (l10n) => l10n.catalogCommunity,
-      summary: (l10n) => l10n.catalogCommunitySummary,
-      icon: AppIcons.community,
-      tile: FeatureKind.community,
-      native: (_) => communityPage(),
-    ),
-    FeatureItem.localized(
       id: 'ds-bot',
       title: (_) => 'DS Bot',
       summary: (l10n) => l10n.catalogBotSummary,

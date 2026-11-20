@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'dev/frame_probe.dart';
@@ -15,10 +18,20 @@ import 'ui/theme/theme.dart';
 
 Future<void> main() => runWithFrameProbe(_startApp);
 
+Future<void> _attachErrorLogFile() async {
+  try {
+    final dir = await getApplicationSupportDirectory();
+    appErrorLog.attachFile(File('${dir.path}/app_errors.jsonl'));
+  } catch (_) {
+    // Non-fatal: in-memory error capture still works.
+  }
+}
+
 Future<void> _startApp() async {
   if (!frameProbeEnabled) SteadyFrameBinding();
   WidgetsFlutterBinding.ensureInitialized();
   appErrorCapture.install();
+  unawaited(_attachErrorLogFile());
   // The first frame is already in the chosen language (设置 → 语言), and is the launch
   // window's own picture (启动画面, lib/launch/launch_state.dart).
   await Future.wait([AppLanguageController.load(), LaunchController.begin()]);
