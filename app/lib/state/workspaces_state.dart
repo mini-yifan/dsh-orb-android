@@ -17,9 +17,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/l10n.dart';
+import 'connection_state.dart';
 import 'hosts_state.dart';
 import 'read_list_cache.dart';
 import 'read_list_identity.dart';
+
+/// Default working directory for sessions created on the phone (inside the rootfs).
+const localWorkspaceDir = '/root/workspace';
 
 // ── Host registry ────────────────────────────────────────────────────────────
 
@@ -85,6 +89,8 @@ class WorkspacesController extends Notifier<WorkspacesState> {
   List<String> _order = const [];
   final Set<String> _removed = {};
   DshClient? _client;
+  bool _isLocal = false;
+  Future<Workspace?>? _defaultEnsureFuture;
   ReadListIdentity? _identity;
 
   @override
@@ -93,8 +99,10 @@ class WorkspacesController extends Notifier<WorkspacesState> {
     _rows.clear();
     _order = const [];
     _removed.clear();
+    _defaultEnsureFuture = null;
     final conn = r.watch(readListLiveConnectionProvider);
     _client = conn?.client;
+    _isLocal = conn?.isLocal == true;
     _identity = conn == null ? null : r.watch(readListIdentityProvider);
     if (conn == null) return const WorkspacesState();
     final sub = conn.client.watchWorkspaces().listen(
@@ -187,6 +195,45 @@ class WorkspacesController extends Notifier<WorkspacesState> {
     return result.workspace;
   }
 
+  /// Registers [localWorkspaceDir] as `default-workspace` on the local engine
+  /// when it starts with zero workspaces, so default chats and remote
+  /// `device_agent` tasks both land in a registered workspace automatically.
+  Future<Workspace?> ensureLocalDefault() {
+    final existing = findLocalDefaultWorkspace(state.workspaces);
+    if (existing != null) return Future.value(existing);
+    final client = _client;
+    if (!_isLocal || client == null || state.status != WorkspacesStatus.ready || state.workspaces.isNotEmpty) {
+      return Future.value(null);
+    }
+    final active = _defaultEnsureFuture;
+    if (active != null) return active;
+    final future = () async {
+      final r = ref;
+      try {
+        final result = await client.createWorkspace(localWorkspaceDir);
+        var workspace = result.workspace;
+        if (!r.mounted || !identical(_client, client)) return null;
+        if (workspace.title.trim() != 'default-workspace') {
+          try {
+            workspace = await client.renameWorkspace(workspace.workspaceId, 'default-workspace');
+          } catch (_) {
+            // Keep the registered workspace if rename fails or is unsupported.
+          }
+        }
+        if (!r.mounted || !identical(_client, client)) return null;
+        _removed.remove(workspace.workspaceId);
+        _upsert(workspace);
+        _emit();
+        return workspace;
+      } catch (_) {
+        return null;
+      } finally {
+        _defaultEnsureFuture = null;
+      }
+    }();
+    return _defaultEnsureFuture = future;
+  }
+
   Future<Workspace> rename(String workspaceId, String title) async {
     final r = ref;
     final w = await _requireClient.renameWorkspace(workspaceId, title);
@@ -220,6 +267,20 @@ class WorkspacesController extends Notifier<WorkspacesState> {
 }
 
 final workspacesProvider = NotifierProvider<WorkspacesController, WorkspacesState>(WorkspacesController.new);
+
+/// Once per local engine connection, registers the default workspace if the
+/// engine starts with none so newly installed phones have「默认工作区」ready.
+final localDefaultWorkspaceBootstrapProvider = Provider<void>((ref) {
+  final conn = ref.watch(activeConnectionProvider).value;
+  if (conn == null || !conn.isLocal) return;
+  final shouldCreate = ref.watch(
+    workspacesProvider.select((s) => s.status == WorkspacesStatus.ready && s.workspaces.isEmpty),
+  );
+  if (!shouldCreate) return;
+  scheduleMicrotask(() {
+    if (ref.mounted) unawaited(ref.read(workspacesProvider.notifier).ensureLocalDefault());
+  });
+});
 
 // ── This phone's view, per host ──────────────────────────────────────────────
 
@@ -472,6 +533,20 @@ String workspaceTitle(Workspace w) {
 int workspaceConversationCount(Workspace w, Iterable<String> visible) {
   final members = w.sessionIds.toSet();
   return visible.where(members.contains).length;
+}
+
+Workspace? findLocalDefaultWorkspace(List<Workspace> workspaces) {
+  for (final w in workspaces) {
+    if (w.path == localWorkspaceDir || w.title.trim() == 'default-workspace') return w;
+  }
+  return null;
+}
+
+/// Default workspace for local new chats when no workspace is selected in the
+/// drawer: prefer the registered default workspace, else fall back to the most
+/// recently used workspace.
+Workspace? preferredLocalDefaultWorkspace(List<Workspace> workspaces, Iterable<SessionSummary>? sessions) {
+  return findLocalDefaultWorkspace(workspaces) ?? recentWorkspace(workspaces, sessions ?? const []);
 }
 
 /// The workspace used last: the one whose conversation moved most recently,

@@ -16,6 +16,7 @@ import '../../state/hosts_state.dart';
 import '../../state/notify_state.dart';
 import '../../state/onboarding_state.dart';
 import '../../state/settings_state.dart';
+import '../../state/workspaces_state.dart';
 import '../../ui_config/ui_skill.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../onboarding/setup_progress.dart';
@@ -308,6 +309,8 @@ class _RootGateState extends ConsumerState<RootGate> {
     // Each start of the on-device engine writes the bundled skills (dsh-go-ui,
     // dsh-go-plugin) into its skills folder, while they are still the app's.
     ref.listen(uiSkillAutoInstallProvider, (_, _) {});
+    // Ensure fresh installs have「默认工作区」(/root/workspace) registered once ready.
+    ref.listen(localDefaultWorkspaceBootstrapProvider, (_, _) {});
     // The rootfs came or went: files read straight from it look again.
     ref.listen(localRuntimeProvider.select((s) => s.status.installedVersion), (prev, next) {
       if (prev != next) ref.invalidate(guestFsProvider);

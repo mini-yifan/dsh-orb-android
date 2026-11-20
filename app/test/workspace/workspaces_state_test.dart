@@ -181,26 +181,50 @@ void main() {
   });
 
   group('new conversations', () {
-    test('start in the selected workspace, else in the default folder', () async {
-      final host = FakeWorkspaceHost(folders: ['/root/code/app']);
-      final ws = host.seedWorkspace('/root/code/app');
+    test('start in the selected workspace, else auto-register default-workspace when empty', () async {
+      final host = FakeWorkspaceHost(folders: ['/root/workspace', '/root/code/app']);
       final container = containerFor(host);
+      container.listen(localDefaultWorkspaceBootstrapProvider, (_, _) {});
       container.listen(workspacesProvider, (_, _) {});
       container.listen(sessionsProvider, (_, _) {});
       await _settle();
 
+      // Bootstrap creates and names the default workspace automatically when empty.
+      final defaultWs = container.read(workspacesProvider).workspaces.single;
+      expect(defaultWs.path, localWorkspaceDir);
+      expect(defaultWs.title, 'default-workspace');
+      expect(workspaceTitle(defaultWs), '默认工作区');
+
       await container.read(sessionsProvider.notifier).create();
       expect(host.argsOf('session/create').last, {
-        'request': {'cwd': localWorkspaceDir},
+        'request': {'workspaceId': defaultWs.workspaceId},
       });
 
-      await container.read(workspacePrefsProvider.notifier).select(ws['workspaceId'] as String);
+      final appWs = await container.read(workspacesProvider.notifier).add('/root/code/app');
+      await container.read(workspacePrefsProvider.notifier).select(appWs.workspaceId);
       await container.read(sessionsProvider.notifier).create();
       expect(host.argsOf('session/create').last, {
-        'request': {'workspaceId': ws['workspaceId']},
+        'request': {'workspaceId': appWs.workspaceId},
       });
       await _settle();
-      expect(container.read(workspacesProvider).workspaces.single.sessionIds, hasLength(1));
+      expect(container.read(workspacesProvider).byId(appWs.workspaceId)!.sessionIds, hasLength(1));
+    });
+
+    test('does not recreate default-workspace if user removed it while keeping other workspaces', () async {
+      final host = FakeWorkspaceHost(folders: ['/root/workspace', '/root/code/app']);
+      final appWs = host.seedWorkspace('/root/code/app');
+      final container = containerFor(host);
+      container.listen(localDefaultWorkspaceBootstrapProvider, (_, _) {});
+      container.listen(workspacesProvider, (_, _) {});
+      container.listen(sessionsProvider, (_, _) {});
+      await _settle();
+
+      expect(container.read(workspacesProvider).workspaces, hasLength(1));
+      await container.read(sessionsProvider.notifier).create();
+      expect(host.argsOf('session/create').last, {
+        'request': {'workspaceId': appWs['workspaceId']},
+      });
+      expect(host.argsOf('workspace/create'), isEmpty);
     });
 
     test('a workspace removed meanwhile falls back to the default folder', () async {

@@ -16,8 +16,7 @@ import 'read_list_identity.dart';
 import 'settings_state.dart';
 import 'workspaces_state.dart';
 
-/// Default working directory for sessions created on the phone (inside the rootfs).
-const localWorkspaceDir = '/root/workspace';
+export 'workspaces_state.dart' show localWorkspaceDir;
 
 class ArchiveCommitResult {
   const ArchiveCommitResult(this.archived, this.failed);
@@ -618,11 +617,26 @@ class SessionsController extends AsyncNotifier<List<SessionSummary>> {
     // own default.
     var workspaceId = await workspaceForNewSession(ref);
     checkCurrent();
-    if (workspaceId == null && _hostPicksNewChatDirectory(conn)) {
-      await _listsForNewChat();
-      checkCurrent();
-      final sameHost = identical(ref.read(activeConnectionProvider).value?.client, conn.client);
-      if (sameHost) workspaceId = _recentForNewChat(conn, ref.read(workspacesProvider), state.value)?.workspaceId;
+    if (workspaceId == null) {
+      if (conn.isLocal) {
+        await _listsForNewChat();
+        checkCurrent();
+        final sameHost = identical(ref.read(activeConnectionProvider).value?.client, conn.client);
+        if (sameHost) {
+          final registry = ref.read(workspacesProvider);
+          var picked = preferredLocalDefaultWorkspace(registry.workspaces, state.value);
+          if (picked == null && registry.ready && registry.workspaces.isEmpty) {
+            picked = await ref.read(workspacesProvider.notifier).ensureLocalDefault();
+            checkCurrent();
+          }
+          workspaceId = picked?.workspaceId;
+        }
+      } else if (_hostPicksNewChatDirectory(conn)) {
+        await _listsForNewChat();
+        checkCurrent();
+        final sameHost = identical(ref.read(activeConnectionProvider).value?.client, conn.client);
+        if (sameHost) workspaceId = _recentForNewChat(conn, ref.read(workspacesProvider), state.value)?.workspaceId;
+      }
     }
     final created = await createSessionInWorkspace(
       conn.client,
