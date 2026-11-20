@@ -17,6 +17,8 @@ app/android/build/
 # build outputs never belong in git
 *.apk
 *.aab
+# macOS Finder metadata, regenerated on every directory browse
+.DS_Store
 # golden-test failure dumps (flutter test writes them next to the goldens)
 **/test/**/failures/
 
