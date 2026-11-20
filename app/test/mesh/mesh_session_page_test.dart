@@ -86,7 +86,7 @@ void main() {
     expect(find.text('看一下桌面'), findsOneWidget);
     expect(find.textContaining('文件已回传'), findsOneWidget);
     expect(find.textContaining('工具 · pwsh'), findsOneWidget);
-    expect(find.text('输入指令，交给远端任务会话…'), findsOneWidget);
+    expect(find.text('输入消息，继续这段远端会话…'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
