@@ -240,6 +240,7 @@ class SessionsDrawer extends ConsumerWidget {
                           onHost: () => showHostSheet(context, onManage: () => onOpen(DrawerDestination.remote)),
                           onLocalDetails: () => onOpen(DrawerDestination.engine),
                           onFeatures: () => onOpen(DrawerDestination.features),
+                          onMesh: () => onOpen(DrawerDestination.mesh),
                           onSettings: () => onOpen(DrawerDestination.settings),
                           onSettingsHold: () => onOpen(DrawerDestination.settingsSearch),
                         ),
@@ -921,6 +922,7 @@ class IdentityBar extends ConsumerWidget {
     super.key,
     required this.onHost,
     required this.onFeatures,
+    this.onMesh,
     required this.onSettings,
     this.onSettingsHold,
     this.onLocalDetails,
@@ -934,6 +936,7 @@ class IdentityBar extends ConsumerWidget {
   /// 全部功能: what there is to do now. (网页版 is in 全部功能, in 设置 ›
   /// 界面 and on the brand row's switch.)
   final VoidCallback onFeatures;
+  final VoidCallback? onMesh;
   final VoidCallback onSettings;
 
   /// ⚙ held down: straight to settings search.
@@ -1051,6 +1054,10 @@ class IdentityBar extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           _RoundButton(icon: AppIcons.allFeatures, tooltip: l10n.hubSettingsAllFeatures, onTap: onFeatures),
+          if (onMesh case final openMesh?) ...[
+            const SizedBox(width: 8),
+            _RoundButton(icon: AppIcons.link, tooltip: l10n.meshTitle, onTap: openMesh),
+          ],
           const SizedBox(width: 8),
           _RoundButton(
             icon: AppIcons.settings,

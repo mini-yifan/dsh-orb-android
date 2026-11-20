@@ -95,6 +95,7 @@ class MeshSession {
     required this.status,
     required this.controllable,
     required this.updatedAt,
+    this.taskId,
   });
 
   factory MeshSession.fromJson(Object? raw, String nodeId, String workspaceId) {
@@ -108,6 +109,7 @@ class MeshSession {
       status: _string(json['status'], 'idle'),
       controllable: json['controllable'] == true,
       updatedAt: _integer(json['updatedAt']),
+      taskId: _stringOrNull(json['taskId']),
     );
   }
 
@@ -118,6 +120,7 @@ class MeshSession {
   final String status;
   final bool controllable;
   final int updatedAt;
+  final String? taskId;
 
   bool get running => status == 'running';
   bool get waitingApproval => status == 'waiting-approval';

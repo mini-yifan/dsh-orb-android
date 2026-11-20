@@ -292,8 +292,8 @@ data class Decision(
  *   not running (remote hosts only).
  */
 class OverlayMachine {
-    var enabled = false
-    var alwaysShow = false
+    var enabled = true
+    var alwaysShow = true
     var snoozedUntil = 0L
 
     /** A window type is usable (accessibility overlay, or the overlay permission works). */

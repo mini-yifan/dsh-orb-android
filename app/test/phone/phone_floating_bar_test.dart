@@ -23,7 +23,7 @@ import 'support.dart';
 const _group = '悬浮条';
 const _opacity = '闲置时不透明度';
 const _auto = '闲置时自动收起';
-const _return = '完成后返回 DSH Go';
+const _return = '完成后返回 DSH Orb';
 
 Finder _row(String title) => find.ancestor(of: find.text(title), matching: find.byType(ListPageRow)).first;
 
@@ -42,7 +42,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('rows', () {
-    testWidgets('one group, three rows, in this order; defaults: 70 %, auto off, return on', (tester) async {
+    testWidgets('one group, three rows, in this order; defaults: 70 %, auto off, return off', (tester) async {
       await pumpPhone(tester, const PhoneControlScreen(), native: FakePhoneNative(status: phoneStatus()));
       expect(find.text(_group), findsOneWidget);
       final ys = [
@@ -52,7 +52,7 @@ void main() {
       expect(find.text('70%'), findsOneWidget);
       expect(tester.widget<Slider>(find.byType(Slider)).value, 70);
       expect(_switch(tester, _auto).value, isFalse);
-      expect(_switch(tester, _return).value, isTrue);
+      expect(_switch(tester, _return).value, isFalse);
       // The rules card keeps only the rules.
       final rulesBottom = tester.getBottomLeft(find.text('确认方式')).dy;
       expect(rulesBottom, lessThan(tester.getTopLeft(find.text(_group)).dy));
@@ -118,9 +118,9 @@ void main() {
       await _reveal(tester);
       await tester.tap(find.text(_return));
       await settlePhone(tester);
-      expect(_switch(tester, _return).value, isFalse);
-      expect(_container(tester).read(phoneReturnPrefProvider), isFalse);
-      expect((await SharedPreferences.getInstance()).getBool(PhoneReturnPrefController.key), isFalse);
+      expect(_switch(tester, _return).value, isTrue);
+      expect(_container(tester).read(phoneReturnPrefProvider), isTrue);
+      expect((await SharedPreferences.getInstance()).getBool(PhoneReturnPrefController.key), isTrue);
     });
 
     testWidgets('without the native side a change still shows for this run', (tester) async {
@@ -144,7 +144,7 @@ void main() {
       expect(auto.label, contains('收成小球，点按展开'));
       expect(auto.flagsCollection.isToggled, Tristate.isFalse);
       final back = tester.getSemantics(find.text(_return)).getSemanticsData();
-      expect(back.flagsCollection.isToggled, Tristate.isTrue);
+      expect(back.flagsCollection.isToggled, Tristate.isFalse);
       semantics.dispose();
     });
   });

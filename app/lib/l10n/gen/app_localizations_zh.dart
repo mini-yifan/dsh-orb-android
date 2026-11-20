@@ -9673,7 +9673,7 @@ class L10nZh extends L10n {
   String get meshSubtitle => '手机加入多设备互联';
 
   @override
-  String get meshIntro => '加入后可以在这台手机上查看、输入和停止其他设备的任务会话，也能让别人把任务派到这台手机。';
+  String get meshIntro => '加入后可以在这台手机上查看、输入和停止其他设备的会话，也能让其他设备连接这台手机。';
 
   @override
   String get meshEngineOff => '本机引擎未运行，先启动引擎再使用互联。';
@@ -9682,7 +9682,7 @@ class L10nZh extends L10n {
   String get meshJoinTitle => '加入互联';
 
   @override
-  String get meshJoinHint => '打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。';
+  String get meshJoinHint => '打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。如果跳转网站后网站打不开，可以换一个浏览器试试。';
 
   @override
   String get meshPairingLabel => '配对串';
@@ -9782,7 +9782,7 @@ class L10nZh extends L10n {
   String get meshResult => '结果';
 
   @override
-  String get meshSendHint => '输入指令，交给远端任务会话…';
+  String get meshSendHint => '输入消息，继续这段远端会话…';
 
   @override
   String get meshSending => '发送中…';
@@ -9791,7 +9791,7 @@ class L10nZh extends L10n {
   String get meshStopped => '已停止这一轮';
 
   @override
-  String get meshReadOnlyHint => '这个会话只能查看；只有任务会话可以输入。';
+  String get meshReadOnlyHint => '当前设备离线或暂不支持远端输入。';
 
   @override
   String get meshRequestFailed => '请求失败';
@@ -9818,10 +9818,16 @@ class L10nZh extends L10n {
   String get meshOpenBrowserAgain => '再次打开浏览器';
 
   @override
-  String get meshApprovalFallback => '如果浏览器没有自动打开，复制下面的地址在浏览器中打开：';
+  String get meshCopyLink => '复制链接';
 
   @override
-  String get meshLinkOpenFailed => '打不开浏览器，请复制下面的地址手动打开。';
+  String get meshLinkCopied => '已复制链接';
+
+  @override
+  String get meshApprovalFallback => '如果浏览器没有自动打开，或跳转网站后网站打不开，可以复制下面的地址换一个浏览器试试：';
+
+  @override
+  String get meshLinkOpenFailed => '打不开浏览器，请复制下面的地址换一个浏览器打开。';
 
   @override
   String meshServerDefaultHint(String server) {

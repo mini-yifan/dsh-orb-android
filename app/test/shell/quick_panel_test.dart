@@ -15,6 +15,7 @@ import 'package:dsh_app/ui/chat/chat_screen.dart';
 import 'package:dsh_app/ui/chat/render/code_block.dart';
 import 'package:dsh_app/ui/engine/engine_screen.dart';
 import 'package:dsh_app/ui/features/all_features_page.dart';
+import 'package:dsh_app/ui/mesh/mesh_page.dart';
 import 'package:dsh_app/ui/plugins/plugins_screen.dart';
 import 'package:dsh_app/ui/remote/remote_screen.dart';
 import 'package:dsh_app/ui/session/session_detail_page.dart';
@@ -497,6 +498,7 @@ void main() {
         DrawerDestination.remote,
         DrawerDestination.settingsSearch,
         DrawerDestination.features,
+        DrawerDestination.mesh,
       ]) {
         expect(_row(other), findsNothing);
       }
@@ -510,6 +512,7 @@ void main() {
       DrawerDestination.settings: SettingsScreen,
       DrawerDestination.settingsSearch: SettingsSearchPage,
       DrawerDestination.features: AllFeaturesPage,
+      DrawerDestination.mesh: MeshPage,
     };
     for (final MapEntry(key: destination, value: page) in pages.entries) {
       testWidgets('${destination.name} opens its page; back lands on the chat', (tester) async {

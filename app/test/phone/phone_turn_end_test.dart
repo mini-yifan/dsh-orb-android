@@ -161,8 +161,12 @@ void main() {
 
     Future<void> settle() => notify.settle();
 
-    Future<PhoneTurnEndController> make({Set<String> running = const {'s1'}, String? viewed}) async {
-      SharedPreferences.setMockInitialValues({});
+    Future<PhoneTurnEndController> make({
+      Set<String> running = const {'s1'},
+      String? viewed,
+      bool returnAfterDone = true,
+    }) async {
+      SharedPreferences.setMockInitialValues({PhoneReturnPrefController.key: returnAfterDone});
       native = FakePhoneNative(status: phoneStatus(taskActive: false))..install();
       container = ProviderContainer(overrides: [localConnectionProvider.overrideWith(() => _Local(_Client(running)))]);
       addTearDown(container.dispose);
@@ -170,6 +174,7 @@ void main() {
       if (viewed != null) container.read(currentSessionProvider.notifier).select(viewed);
       container.read(appForegroundProvider.notifier).set(false);
       container.listen(phoneTurnEndProvider, (_, _) {});
+      container.read(phoneReturnPrefProvider);
       await settle();
       expect(native.listening, isTrue);
       native.push(phoneStatus(taskActive: true, taskId: 1));
@@ -307,19 +312,19 @@ void main() {
       expect(await phone.onTurnEnd(_end('s1')), isNotNull);
     });
 
-    test('the switch is on by default and kept', () async {
+    test('the switch is off by default and kept', () async {
       SharedPreferences.setMockInitialValues({});
       final c = ProviderContainer();
       addTearDown(c.dispose);
-      expect(c.read(phoneReturnPrefProvider), isTrue);
-      await c.read(phoneReturnPrefProvider.notifier).set(false);
-      expect((await SharedPreferences.getInstance()).getBool(PhoneReturnPrefController.key), isFalse);
+      expect(c.read(phoneReturnPrefProvider), isFalse);
+      await c.read(phoneReturnPrefProvider.notifier).set(true);
+      expect((await SharedPreferences.getInstance()).getBool(PhoneReturnPrefController.key), isTrue);
 
       final again = ProviderContainer();
       addTearDown(again.dispose);
       again.read(phoneReturnPrefProvider);
       await notify.settle();
-      expect(again.read(phoneReturnPrefProvider), isFalse);
+      expect(again.read(phoneReturnPrefProvider), isTrue);
     });
   });
 
@@ -330,8 +335,11 @@ void main() {
     late notify.FakeAlertSource local;
     late ProviderContainer container;
 
-    Future<void> make({bool doneNotifications = true}) async {
-      SharedPreferences.setMockInitialValues({'notify_done': doneNotifications});
+    Future<void> make({bool doneNotifications = true, bool returnAfterDone = true}) async {
+      SharedPreferences.setMockInitialValues({
+        'notify_done': doneNotifications,
+        PhoneReturnPrefController.key: returnAfterDone,
+      });
       native = FakePhoneNative(status: phoneStatus(taskActive: true, taskId: 1))..install();
       channel = notify.FakeNotifyChannel();
       local = notify.FakeAlertSource()..sessions = [notify.session('s1', title: '点外卖', running: true)];
@@ -348,6 +356,7 @@ void main() {
       addTearDown(container.dispose);
       container.listen(phoneTurnEndProvider, (_, _) {});
       container.listen(chatAlertsProvider, (_, _) {});
+      container.read(phoneReturnPrefProvider);
       await notify.settle();
       container.read(appForegroundProvider.notifier).set(false);
       await notify.settle();

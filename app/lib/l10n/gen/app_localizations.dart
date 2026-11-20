@@ -17861,7 +17861,7 @@ abstract class L10n {
   /// No description provided for @meshIntro.
   ///
   /// In zh, this message translates to:
-  /// **'加入后可以在这台手机上查看、输入和停止其他设备的任务会话，也能让别人把任务派到这台手机。'**
+  /// **'加入后可以在这台手机上查看、输入和停止其他设备的会话，也能让其他设备连接这台手机。'**
   String get meshIntro;
 
   /// No description provided for @meshEngineOff.
@@ -17879,7 +17879,7 @@ abstract class L10n {
   /// No description provided for @meshJoinHint.
   ///
   /// In zh, this message translates to:
-  /// **'打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。'**
+  /// **'打开开关后，浏览器会打开授权页面。用邮箱登录并同意后，这台手机就加入互联了。如果跳转网站后网站打不开，可以换一个浏览器试试。'**
   String get meshJoinHint;
 
   /// No description provided for @meshPairingLabel.
@@ -18071,7 +18071,7 @@ abstract class L10n {
   /// No description provided for @meshSendHint.
   ///
   /// In zh, this message translates to:
-  /// **'输入指令，交给远端任务会话…'**
+  /// **'输入消息，继续这段远端会话…'**
   String get meshSendHint;
 
   /// No description provided for @meshSending.
@@ -18089,7 +18089,7 @@ abstract class L10n {
   /// No description provided for @meshReadOnlyHint.
   ///
   /// In zh, this message translates to:
-  /// **'这个会话只能查看；只有任务会话可以输入。'**
+  /// **'当前设备离线或暂不支持远端输入。'**
   String get meshReadOnlyHint;
 
   /// No description provided for @meshRequestFailed.
@@ -18140,16 +18140,28 @@ abstract class L10n {
   /// **'再次打开浏览器'**
   String get meshOpenBrowserAgain;
 
+  /// No description provided for @meshCopyLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制链接'**
+  String get meshCopyLink;
+
+  /// No description provided for @meshLinkCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'已复制链接'**
+  String get meshLinkCopied;
+
   /// No description provided for @meshApprovalFallback.
   ///
   /// In zh, this message translates to:
-  /// **'如果浏览器没有自动打开，复制下面的地址在浏览器中打开：'**
+  /// **'如果浏览器没有自动打开，或跳转网站后网站打不开，可以复制下面的地址换一个浏览器试试：'**
   String get meshApprovalFallback;
 
   /// No description provided for @meshLinkOpenFailed.
   ///
   /// In zh, this message translates to:
-  /// **'打不开浏览器，请复制下面的地址手动打开。'**
+  /// **'打不开浏览器，请复制下面的地址换一个浏览器打开。'**
   String get meshLinkOpenFailed;
 
   /// No description provided for @meshServerDefaultHint.

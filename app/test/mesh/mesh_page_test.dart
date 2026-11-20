@@ -83,6 +83,27 @@ class _FakeMeshApi extends MeshApi {
           },
         ],
       },
+      {
+        'nodeId': 'mac',
+        'name': 'mac-studio',
+        'platform': 'darwin',
+        'online': true,
+        'workspaces': [
+          {
+            'workspaceId': 'w-mac',
+            'title': 'Mac Workspace',
+            'sessions': [
+              {
+                'sessionId': 's-normal',
+                'title': '普通日常对话',
+                'status': 'idle',
+                'controllable': true,
+                'updatedAt': 2,
+              },
+            ],
+          },
+        ],
+      },
     ],
   });
 
@@ -95,7 +116,9 @@ class _FakeMeshApi extends MeshApi {
 }
 
 void main() {
-  testWidgets('shows peers and hides the local device in the tree', (tester) async {
+  testWidgets('collapses peer workspaces by default, toggles one device at a time, and orders rename before peers', (
+    tester,
+  ) async {
     usePhoneView(tester);
     await tester.pumpWidget(
       testApp(
@@ -106,10 +129,33 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.textContaining('win32-asus'), findsOneWidget);
+    expect(find.text('win32-asus'), findsOneWidget);
+    expect(find.text('mac-studio'), findsOneWidget);
+    expect(find.text('dsh_orb'), findsNothing);
+    expect(find.text('列出桌面文件并分类汇总'), findsNothing);
+    expect(find.text('Mac Workspace'), findsNothing);
+    expect(find.text('This phone workspace'), findsNothing);
+
+    // Rename stays above peers; leave interconnect stays at the bottom.
+    final renameY = tester.getTopLeft(find.text('修改本机名称')).dy;
+    final peerY = tester.getTopLeft(find.text('win32-asus')).dy;
+    final leaveY = tester.getTopLeft(find.text('退出互联')).dy;
+    expect(renameY, lessThan(peerY));
+    expect(peerY, lessThan(leaveY));
+
+    // Tap first peer: expands its workspace and session.
+    await tester.tap(find.text('win32-asus'));
+    await tester.pump();
     expect(find.text('dsh_orb'), findsOneWidget);
     expect(find.text('列出桌面文件并分类汇总'), findsOneWidget);
-    expect(find.text('This phone workspace'), findsNothing);
+    expect(find.text('Mac Workspace'), findsNothing);
+
+    // Tap second peer: collapses the first and opens the second.
+    await tester.tap(find.text('mac-studio'));
+    await tester.pump();
+    expect(find.text('dsh_orb'), findsNothing);
+    expect(find.text('Mac Workspace'), findsOneWidget);
+    expect(find.text('普通日常对话'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
@@ -172,14 +218,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(api.startedWith, 'https://mesh.example');
-    // Waiting for the browser is shown, not a form the user has to resubmit.
+    // Waiting for the browser is shown, along with the copy-link action and fallback hint.
     expect(find.textContaining('等待确认'), findsOneWidget);
+    expect(find.text('复制链接'), findsOneWidget);
+    expect(find.textContaining('换一个浏览器试试'), findsWidgets);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
 
-  testWidgets('the switch refuses to start without an address', (tester) async {
+  testWidgets('the switch falls back to the built-in default server when none is configured', (tester) async {
     usePhoneView(tester);
     final api = _FakeMeshApi(paired: false);
     await tester.pumpWidget(
@@ -192,8 +240,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(api.startedWith, isNull);
-    expect(find.text('请先填写服务器地址。'), findsOneWidget);
+    expect(api.startedWith, 'https://dshorb.top');
+    expect(find.textContaining('等待确认'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

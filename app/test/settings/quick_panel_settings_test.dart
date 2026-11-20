@@ -111,6 +111,7 @@ void main() {
       DrawerDestination.remote,
       DrawerDestination.settingsSearch,
       DrawerDestination.features,
+      DrawerDestination.mesh,
     ]);
   });
 
@@ -251,6 +252,7 @@ void main() {
       'settings',
       'settingsSearch',
       'features',
+      'mesh',
     ]);
   });
 }

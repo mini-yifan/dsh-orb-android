@@ -19,10 +19,17 @@ class OverlayMachineTest {
     /** Enabled, permitted, pack loaded, app in the background, nothing going on. */
     private fun ready(): OverlayMachine = OverlayMachine().apply {
         enabled = true
+        alwaysShow = false
         canHost = true
         hasPet = true
         onPush(push("idle"), t0)
         onForeground(false, t0)
+    }
+
+    @Test fun defaultsToOutsideAppAndAlwaysShow() {
+        val m = OverlayMachine()
+        assertTrue(m.enabled)
+        assertTrue(m.alwaysShow)
     }
 
     @Test fun hiddenWhileTheAppIsOnScreen() {

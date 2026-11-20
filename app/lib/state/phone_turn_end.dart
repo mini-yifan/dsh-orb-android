@@ -26,7 +26,7 @@ void _trace(String message) {
   }
 }
 
-/// 设置 → 手机操控 → 「完成后返回 dsh-go」, on by default.
+/// 设置 → 手机操控 → 「完成后返回 DSH Orb」, off by default so the phone stays on the acted screen.
 class PhoneReturnPrefController extends Notifier<bool> {
   static const key = 'phone_return_after_done';
 
@@ -35,7 +35,7 @@ class PhoneReturnPrefController extends Notifier<bool> {
   @override
   bool build() {
     _loaded = _load();
-    return true;
+    return false;
   }
 
   Future<void> _load() async {

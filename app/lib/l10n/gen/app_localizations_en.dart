@@ -10189,7 +10189,7 @@ class L10nEn extends L10n {
 
   @override
   String get meshIntro =>
-      'Once joined, this phone can view, prompt, and stop task sessions on other devices, and they can send work to it.';
+      'Once joined, this phone can view, prompt, and stop sessions on other devices, and they can connect to it.';
 
   @override
   String get meshEngineOff => 'The local engine is not running. Start it before using Interconnect.';
@@ -10199,7 +10199,7 @@ class L10nEn extends L10n {
 
   @override
   String get meshJoinHint =>
-      'Turn the switch on and the browser opens the approval page. Sign in with your email and approve to join.';
+      'Turn the switch on and the browser opens the approval page. Sign in with your email and approve to join. If the page fails to open after redirecting, try another browser.';
 
   @override
   String get meshPairingLabel => 'Pairing string';
@@ -10299,7 +10299,7 @@ class L10nEn extends L10n {
   String get meshResult => 'Result';
 
   @override
-  String get meshSendHint => 'Send a command to this remote task session…';
+  String get meshSendHint => 'Send a message to continue this remote session…';
 
   @override
   String get meshSending => 'Sending…';
@@ -10308,7 +10308,7 @@ class L10nEn extends L10n {
   String get meshStopped => 'Stopped this turn';
 
   @override
-  String get meshReadOnlyHint => 'This session is view-only; only task sessions accept commands.';
+  String get meshReadOnlyHint => 'This device is offline or remote input is unavailable.';
 
   @override
   String get meshRequestFailed => 'Request failed';
@@ -10335,10 +10335,17 @@ class L10nEn extends L10n {
   String get meshOpenBrowserAgain => 'Open the browser again';
 
   @override
-  String get meshApprovalFallback => 'If the browser does not open, copy this address into one:';
+  String get meshCopyLink => 'Copy link';
 
   @override
-  String get meshLinkOpenFailed => 'The browser could not be opened. Copy the address below and open it manually.';
+  String get meshLinkCopied => 'Link copied';
+
+  @override
+  String get meshApprovalFallback =>
+      'If the browser did not open, or the page fails to load after redirecting, copy the link below and try another browser:';
+
+  @override
+  String get meshLinkOpenFailed => 'The browser could not be opened. Copy the link below and try another browser.';
 
   @override
   String meshServerDefaultHint(String server) {

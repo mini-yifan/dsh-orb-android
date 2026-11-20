@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -45,6 +46,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
 
   final _server = TextEditingController();
   final _expanded = <String>{};
+  String? _expandedPeerId;
   MeshStatus? _status;
   MeshTree? _tree;
   bool _loading = true;
@@ -163,13 +165,10 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         throw const MeshApiException(0, 'link_failed', '');
       }
       setState(() => _link = started);
-      final opened = await launchUrl(
-        Uri.parse(started.approvalUrl),
-        mode: LaunchMode.externalApplication,
-      ).catchError((_) => false);
+      final opened = await _launchApprovalUrl(started.approvalUrl);
       if (!mounted) return;
       if (!opened) {
-        // The card keeps the URL visible so it can be copied by hand.
+        // The card keeps the URL visible so it can be copied with one tap.
         setState(() => _error = context.l10n.meshLinkOpenFailed);
       }
       _startLinkPolling();
@@ -297,8 +296,9 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         ] else ...[
           if (_error != null) _errorCard(_error!),
           _header(l10n, status!),
+          _renameSection(l10n),
           _treeSection(l10n, _tree),
-          _settings(l10n),
+          _leaveSection(l10n),
         ],
       ],
     );
@@ -423,6 +423,14 @@ class _MeshPageState extends ConsumerState<MeshPage> {
                     label: Text(l10n.meshOpenBrowserAgain),
                   ),
                 ),
+                if (_link!.approvalUrl.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => unawaited(_copyApprovalUrl()),
+                    icon: const Icon(AppIcons.copy, size: 18),
+                    label: Text(l10n.meshCopyLink),
+                  ),
+                ],
               ],
             ),
           ),
@@ -431,11 +439,39 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     );
   }
 
+  /// Try external browser first (easier to switch browsers), then platform
+  /// default and in-app Custom Tabs as fallbacks on restrictive Android ROMs.
+  Future<bool> _launchApprovalUrl(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) return false;
+    for (final mode in const [
+      LaunchMode.externalApplication,
+      LaunchMode.platformDefault,
+      LaunchMode.inAppBrowserView,
+    ]) {
+      try {
+        if (await launchUrl(uri, mode: mode)) return true;
+      } catch (_) {
+        // Try the next launch mode.
+      }
+    }
+    return false;
+  }
+
+  Future<void> _copyApprovalUrl() async {
+    final url = _link?.approvalUrl ?? '';
+    if (url.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(context.l10n.meshLinkCopied)));
+  }
+
   Future<void> _reopenBrowser() async {
     final url = _link?.approvalUrl ?? '';
     if (url.isEmpty) return;
-    final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
-        .catchError((_) => false);
+    final opened = await _launchApprovalUrl(url);
     if (!opened && mounted) setState(() => _error = context.l10n.meshLinkOpenFailed);
   }
 
@@ -475,83 +511,93 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   }
 
   Widget _peerSection(L10n l10n, MeshNode peer) {
-    final workspaces = [...peer.workspaces]
-      ..sort((left, right) {
-        final latest = right.latestAt.compareTo(left.latestAt);
-        return latest != 0 ? latest : left.name.compareTo(right.name);
-      });
-    final children = <Widget>[];
-    if (workspaces.isEmpty) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Text(l10n.meshNoSessions),
-        ),
-      );
-    }
-    for (final workspace in workspaces) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-          child: Row(
-            children: [
-              const Icon(AppIcons.folder, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  workspace.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+    final isExpanded = _expandedPeerId == peer.nodeId;
+    final children = <Widget>[
+      SettingsTile(
+        icon: AppIcons.remoteHost,
+        title: peer.name,
+        subtitle: peer.online ? l10n.meshOnline : l10n.meshOffline,
+        trailing: Icon(isExpanded ? AppIcons.collapse : AppIcons.expand, size: 18),
+        chevron: false,
+        onTap: () => setState(() => _expandedPeerId = isExpanded ? null : peer.nodeId),
+      ),
+    ];
+    if (isExpanded) {
+      final workspaces = [...peer.workspaces]
+        ..sort((left, right) {
+          final latest = right.latestAt.compareTo(left.latestAt);
+          return latest != 0 ? latest : left.name.compareTo(right.name);
+        });
+      if (workspaces.isEmpty) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Text(l10n.meshNoSessions),
+          ),
+        );
+      }
+      for (final workspace in workspaces) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(
+              children: [
+                const Icon(AppIcons.folder, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    workspace.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      );
-      final sessions = [...workspace.sessions]..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-      if (sessions.isEmpty) {
-        children.add(Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 12), child: Text(l10n.meshNoSessions)));
-        continue;
-      }
-      final key = '${peer.nodeId}/${workspace.workspaceId}';
-      final expanded = _expanded.contains(key);
-      final shown = expanded ? sessions : sessions.take(5).toList();
-      for (final session in shown) {
-        children.add(_sessionTile(l10n, peer, workspace, session));
-      }
-      final hidden = sessions.length - shown.length;
-      if (hidden > 0) {
-        children.add(
-          SettingsTile(
-            title: l10n.meshShowMore(hidden),
-            onTap: () => setState(() => _expanded.add(key)),
+              ],
+            ),
           ),
         );
-      } else if (expanded && sessions.length > 5) {
-        children.add(
-          SettingsTile(
-            title: l10n.meshShowLess,
-            onTap: () => setState(() => _expanded.remove(key)),
-          ),
-        );
+        final sessions = [...workspace.sessions]..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+        if (sessions.isEmpty) {
+          children.add(Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 12), child: Text(l10n.meshNoSessions)));
+          continue;
+        }
+        final key = '${peer.nodeId}/${workspace.workspaceId}';
+        final expanded = _expanded.contains(key);
+        final shown = expanded ? sessions : sessions.take(5).toList();
+        for (final session in shown) {
+          children.add(_sessionTile(l10n, peer, workspace, session));
+        }
+        final hidden = sessions.length - shown.length;
+        if (hidden > 0) {
+          children.add(
+            SettingsTile(
+              title: l10n.meshShowMore(hidden),
+              onTap: () => setState(() => _expanded.add(key)),
+            ),
+          );
+        } else if (expanded && sessions.length > 5) {
+          children.add(
+            SettingsTile(
+              title: l10n.meshShowLess,
+              onTap: () => setState(() => _expanded.remove(key)),
+            ),
+          );
+        }
       }
     }
-    return SettingsSection(
-      title: '${peer.name} · ${peer.online ? l10n.meshOnline : l10n.meshOffline}',
-      children: children,
-    );
+    return SettingsSection(children: children);
   }
 
   Widget _sessionTile(L10n l10n, MeshNode peer, MeshWorkspace workspace, MeshSession session) {
+    final canChat = session.controllable && peer.online;
     final details = <String>[meshStatusLabel(l10n, session.status)];
     if (session.status == 'idle') {
       final updated = meshUpdatedLabel(context, session.updatedAt);
       if (updated.isNotEmpty) details.add(updated);
     }
-    if (!session.controllable) details.add(l10n.meshReadOnly);
+    if (!canChat) details.add(l10n.meshReadOnly);
     return SettingsTile(
-      icon: session.controllable ? AppIcons.chat : AppIcons.lock,
+      icon: canChat ? AppIcons.chat : AppIcons.lock,
       title: session.title,
       subtitle: details.join(' · '),
       trailing: const Icon(AppIcons.disclosure, size: 16),
@@ -562,15 +608,20 @@ class _MeshPageState extends ConsumerState<MeshPage> {
           title: session.title,
           nodeName: peer.name,
           workspaceName: workspace.name,
-          controllable: session.controllable,
+          controllable: canChat,
         ),
       ),
     );
   }
 
-  Widget _settings(L10n l10n) => SettingsSection(
+  Widget _renameSection(L10n l10n) => SettingsSection(
     children: [
       SettingsTile(icon: AppIcons.edit, title: l10n.meshRename, onTap: () => unawaited(_rename())),
+    ],
+  );
+
+  Widget _leaveSection(L10n l10n) => SettingsSection(
+    children: [
       SettingsTile(
         icon: AppIcons.logout,
         title: l10n.meshLeave,

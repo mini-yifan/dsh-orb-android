@@ -203,8 +203,8 @@ internal object PetOverlay {
         prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         askDraft = prefs.getString("ask_draft", "").orEmpty()
         sprites = PetSprites(app, assetPath)
-        machine.enabled = prefs.getBoolean(K_ENABLED, false)
-        machine.alwaysShow = prefs.getBoolean(K_ALWAYS, false)
+        machine.enabled = prefs.getBoolean(K_ENABLED, true)
+        machine.alwaysShow = prefs.getBoolean(K_ALWAYS, true)
         machine.snoozedUntil = prefs.getLong(K_SNOOZE, 0L)
         dock = Dock(
             if (prefs.getString(K_SIDE, null) == "left") Side.LEFT else Side.RIGHT,

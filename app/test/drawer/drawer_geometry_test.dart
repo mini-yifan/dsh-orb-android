@@ -225,28 +225,32 @@ void main() {
   });
 
   group('identity bar', () {
-    testWidgets('全部功能 and 设置: equal keys, 8 apart, as tall as the host pill, 10 from the edge', (tester) async {
+    testWidgets('全部功能, 互联, and 设置: equal keys, 8 apart, as tall as the host pill, 10 from the edge', (tester) async {
       await _pump(tester);
       final drawer = _rect(tester, find.byType(SessionsDrawer));
       final bar = find.byType(IdentityBar);
-      // The two glass circles, left to right; their icons say which is which.
+      // The three glass circles, left to right; their icons say which is which.
       Rect key(IconData icon) =>
           _rect(tester, find.ancestor(of: find.byIcon(icon), matching: find.byType(GlassSurface)).first);
       final features = key(AppIcons.allFeatures);
+      final mesh = key(AppIcons.link);
       final settings = key(AppIcons.settings);
       final pill = _rect(
         tester,
         find.descendant(of: bar, matching: find.byKey(const ValueKey('identity-host-controls'))),
       );
+      expect(features.size, mesh.size);
       expect(features.size, settings.size);
       expect(features.width, _near(44));
       expect(features.height, _near(44));
-      expect(settings.left - features.right, _near(8));
+      expect(mesh.left - features.right, _near(8));
+      expect(settings.left - mesh.right, _near(8));
       expect(features.left - pill.right, _near(8));
       expect(drawer.right - settings.right, _near(10));
       expect(pill.left - drawer.left, _near(10));
       expect(pill.height, _near(features.height));
       expect(pill.center.dy, _near(features.center.dy));
+      expect(mesh.center.dy, _near(features.center.dy));
       expect(settings.center.dy, _near(features.center.dy));
     });
   });
