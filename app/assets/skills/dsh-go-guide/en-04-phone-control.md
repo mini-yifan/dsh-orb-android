@@ -65,7 +65,7 @@ Adjust it under **Floating bar** on the phone control page (shown once phone con
 
 - **Idle opacity**: how far the capsule or the ball fades after 3 seconds untouched, 30% to 100%, 70% by default. A touch brings it back; the card and anything waiting for you stay solid. With **Collapse when idle** on, the capsule shrinks to a ball instead of fading, and the ball fades.
 - **Collapse when idle**: off by default. When on, the capsule shrinks to a ball after a few idle seconds, and opens by itself when you need to approve something.
-- **Back to DSH Go when done**: on by default. When the reply ends and the app is in the background, it tries to bring you back to that chat. If the system blocks background windows, use the notification; see Confirmations and return below.
+- **Back to DSH Orb when done**: off by default. When on and the reply ends and the app is in the background, it tries to bring you back to that chat. If the system blocks background windows, use the notification; see Confirmations and return below.
 
 Whatever the settings, the bar closes when the reply ends.
 
@@ -99,7 +99,7 @@ Once phone control is on, this row is under **Advanced** on the phone control pa
 
 When a step needs your decision, DSH Go shows a card. If the card is unavailable, it tries a notification or returns to the app. Allow phone-control notifications and pop-up alerts in system settings. Some phones also offer a permission to display pop-up windows while running in the background; allowing it can help the app return. Menu names vary by system version.
 
-If the app doesn't return after a task finishes, tap **Task complete · View result** in the notification. If the system blocks notifications or background windows, open DSH Go yourself to see the result. Turning on **Back to DSH Go when done** doesn't guarantee that the system will allow it.
+If the app doesn't return after a task finishes, tap **Task complete · View result** in the notification. If the system blocks notifications or background windows, open DSH Go yourself to see the result. Turning on **Back to DSH Orb when done** doesn't guarantee that the system will allow it.
 
 ## App rules
 
@@ -117,7 +117,7 @@ All three are off by default, and each turns on separately:
 
 - **System settings**: permissions, installers, security center, notifications.
 - **Passwords and codes**: fill in passwords, verification and payment codes. The action log shows •••• and never what was typed.
-- **DSH Go itself**: tap and type inside DSH Go.
+- **DSH Orb itself**: tap and type inside DSH Go.
 
 Turning one on opens a page first: what AI can then do, what could go wrong, and the disclaimer below. Press and hold **I understand the risks, turn on** for about 1.5 seconds to apply it. Turning one off takes a single tap. Nothing can be turned on while a task is running. While any is on, the Phone control page shows **Limits lifted**, the floating bar puts a small lock before its line, and **Limits lifted** in its card brings you back here. Banking and payment apps aren't here; change them in **App rules**.
 

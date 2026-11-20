@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dsh-go APKs. Every APK that goes onto a phone or emulator comes from
+# Builds DSH Orb APKs. Every APK that goes onto a phone or emulator comes from
 # here, dev and release alike: each build gets a fresh versionCode (the build
 # minute, see tooling/build_number.py), so it installs over the previous one and
 # the system refreshes what it cached for the old build (icons included).
@@ -113,7 +113,7 @@ for f in "${flavors[@]}"; do
   commands+=("$(printf '%q ' "${cmd[@]}")")
 done
 
-echo "dsh-go $name ($code, $when) · $mode · ${flavors[*]}$( ((beta)) && echo ' · beta channel')"
+echo "dsh-orb $name ($code, $when) · $mode · ${flavors[*]}$( ((beta)) && echo ' · beta channel')"
 if ((dry)); then
   for c in "${commands[@]}"; do echo "(cd app && ${c% })"; done
   ((keep_daemon)) || echo "(cd app/android && ./gradlew --stop)"
@@ -166,5 +166,5 @@ for i in "${!flavors[@]}"; do
 done
 
 echo
-echo "dsh-go $name ($code, $when)"
+echo "dsh-orb $name ($code, $when)"
 for apk in "${built[@]}"; do echo "  ${apk#"$ROOT/"}"; done

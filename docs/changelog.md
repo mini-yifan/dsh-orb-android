@@ -2,6 +2,26 @@
 
 每个版本先中文、后英文。发版时把对应版本的正文（不含版本标题）作为 Release 正文，见 `docs/release.md`。
 
+## 0.1.1 · 2026-11-20
+
+### 中文
+
+- **互联：可以直接在远端新建对话。** 展开一台在线设备后，每个工作区标题行右侧多了一个「＋」，点它就在那台设备的这个工作区里新建一个对话并直接进去聊，不用先在电脑上开好会话。
+- **互联：工作区可以收起。** 点工作区标题行折叠或展开它下面的对话列表；切换设备时自动复位。这样设备多、工作区多的时候一屏能看全。
+- 互联列表里的对话现在都能直接继续聊，不再只有派过去的任务可以输入；任务仍带独立标记，「停止全部」只停任务。
+- 悬浮球默认常驻，手机操控的「完成后返回」默认关闭，让手机停在被操作的界面。
+- 本版起 App 独立为 DSH Orb：包名 `top.dshorb.app`，默认互联服务器 `https://dshorb.top`。内核仍是 Mesh 插件 0.1.5。
+- 手机操控新增「保存截图」工具：拍一张干净、没有元素编号的截图，存到 `下载/DSH-Go/`，同时放进系统剪贴板；也可以拍后台屏。安全窗口、支付或密码页、含银行卡号或身份证号的页面仍不截图。
+
+### English
+
+- **Interconnect: start a chat on a remote device.** Expand an online device and each workspace row has a new "+": it creates a chat in that workspace on that device and opens it, so you no longer have to prepare a session on the computer first.
+- **Interconnect: workspaces collapse.** Tap a workspace row to fold its chat list away; switching devices resets the state. With several devices and workspaces everything now fits on one screen.
+- Chats in the interconnect list all accept messages now, not only dispatched tasks; tasks keep their own marker and "Stop all" still stops tasks only.
+- The floating ball is on by default and phone control's "Back when done" is off by default, leaving the phone on the screen it was working on.
+- This release stands alone as DSH Orb: package `top.dshorb.app`, default interconnect server `https://dshorb.top`, mesh plugin 0.1.5 inside.
+- Phone control has a new "save screenshot" tool: a clean screenshot without element numbers, saved under `Download/DSH-Go/` and put on the system clipboard; it can also capture the background display. Secure windows, payment/password pages, and screens with card or ID numbers are still refused.
+
 ## 未发布
 
 ### 中文
