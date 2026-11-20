@@ -10290,6 +10290,9 @@ class L10nEn extends L10n {
   String get meshEmptySession => 'This session has no record yet.';
 
   @override
+  String get meshNewSession => 'New session';
+
+  @override
   String get meshReasoning => 'Reasoning';
 
   @override

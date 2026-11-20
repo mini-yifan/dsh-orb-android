@@ -424,6 +424,11 @@ class MeshApi {
     return _frames(events, _integer(body['cursor']));
   }
 
+  Future<MeshSession> createSession(String nodeId, String workspaceId) async {
+    final body = await _post('/sessions/${_segment(nodeId)}/create', {'workspaceId': workspaceId});
+    return MeshSession.fromJson(body, nodeId, workspaceId);
+  }
+
   Future<void> prompt(String nodeId, String sessionId, String text) async {
     await _post('/sessions/${_segment(nodeId)}/${_segment(sessionId)}/prompt', {'text': text});
   }

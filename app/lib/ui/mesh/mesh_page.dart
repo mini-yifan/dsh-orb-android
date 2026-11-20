@@ -46,7 +46,9 @@ class _MeshPageState extends ConsumerState<MeshPage> {
 
   final _server = TextEditingController();
   final _expanded = <String>{};
+  final _collapsedWorkspaces = <String>{};
   String? _expandedPeerId;
+  String? _creatingWorkspaceKey;
   MeshStatus? _status;
   MeshTree? _tree;
   bool _loading = true;
@@ -510,6 +512,56 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     );
   }
 
+  void _resetWorkspaceStates() {
+    _collapsedWorkspaces.clear();
+    _expanded.clear();
+  }
+
+  Future<void> _createSession(MeshNode peer, MeshWorkspace workspace) async {
+    final api = ref.read(meshApiProvider);
+    if (api == null) {
+      setState(() => _error = context.l10n.meshEngineOff);
+      return;
+    }
+    if (!peer.online || _creatingWorkspaceKey != null) return;
+    final key = '${peer.nodeId}/${workspace.workspaceId}';
+    setState(() {
+      _creatingWorkspaceKey = key;
+      _error = null;
+    });
+    try {
+      final created = await api.createSession(peer.nodeId, workspace.workspaceId);
+      if (!mounted) return;
+      final rawTitle = created.title.trim();
+      final title = (rawTitle.isEmpty || rawTitle == created.sessionId)
+          ? context.l10n.meshNewSession
+          : rawTitle;
+      setState(() {
+        _creatingWorkspaceKey = null;
+        _expandedPeerId = peer.nodeId;
+        _collapsedWorkspaces.remove(key);
+      });
+      unawaited(_refresh(quiet: true));
+      await Navigator.of(context).push(
+        MeshSessionPage.route(
+          nodeId: peer.nodeId,
+          sessionId: created.sessionId,
+          title: title,
+          nodeName: peer.name,
+          workspaceName: workspace.name,
+          controllable: true,
+        ),
+      );
+      if (mounted) unawaited(_refresh(quiet: true));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _creatingWorkspaceKey = null;
+        _error = _errorText(error);
+      });
+    }
+  }
+
   Widget _peerSection(L10n l10n, MeshNode peer) {
     final isExpanded = _expandedPeerId == peer.nodeId;
     final children = <Widget>[
@@ -519,7 +571,10 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         subtitle: peer.online ? l10n.meshOnline : l10n.meshOffline,
         trailing: Icon(isExpanded ? AppIcons.collapse : AppIcons.expand, size: 18),
         chevron: false,
-        onTap: () => setState(() => _expandedPeerId = isExpanded ? null : peer.nodeId),
+        onTap: () => setState(() {
+          _expandedPeerId = isExpanded ? null : peer.nodeId;
+          _resetWorkspaceStates();
+        }),
       ),
     ];
     if (isExpanded) {
@@ -537,31 +592,67 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         );
       }
       for (final workspace in workspaces) {
+        final key = '${peer.nodeId}/${workspace.workspaceId}';
+        final workspaceCollapsed = _collapsedWorkspaces.contains(key);
+        final creating = _creatingWorkspaceKey == key;
         children.add(
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 2),
             child: Row(
               children: [
-                const Icon(AppIcons.folder, size: 18),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    workspace.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => setState(() {
+                      if (workspaceCollapsed) {
+                        _collapsedWorkspaces.remove(key);
+                      } else {
+                        _collapsedWorkspaces.add(key);
+                      }
+                      _expanded.remove(key);
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      child: Row(
+                        children: [
+                          const Icon(AppIcons.folder, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              workspace.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(workspaceCollapsed ? AppIcons.expand : AppIcons.collapse, size: 16),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+                if (peer.online)
+                  IconButton(
+                    tooltip: l10n.meshNewSession,
+                    visualDensity: VisualDensity.compact,
+                    icon: creating
+                        ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(AppIcons.add, size: 18),
+                    onPressed: _creatingWorkspaceKey != null
+                        ? null
+                        : () => unawaited(_createSession(peer, workspace)),
+                  ),
               ],
             ),
           ),
         );
+        if (workspaceCollapsed) continue;
         final sessions = [...workspace.sessions]..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
         if (sessions.isEmpty) {
           children.add(Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 12), child: Text(l10n.meshNoSessions)));
           continue;
         }
-        final key = '${peer.nodeId}/${workspace.workspaceId}';
         final expanded = _expanded.contains(key);
         final shown = expanded ? sessions : sessions.take(5).toList();
         for (final session in shown) {
@@ -571,14 +662,18 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         if (hidden > 0) {
           children.add(
             SettingsTile(
+              icon: AppIcons.expand,
               title: l10n.meshShowMore(hidden),
+              chevron: false,
               onTap: () => setState(() => _expanded.add(key)),
             ),
           );
         } else if (expanded && sessions.length > 5) {
           children.add(
             SettingsTile(
+              icon: AppIcons.collapse,
               title: l10n.meshShowLess,
+              chevron: false,
               onTap: () => setState(() => _expanded.remove(key)),
             ),
           );

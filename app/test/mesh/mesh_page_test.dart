@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dsh_app/state/mesh_state.dart';
 import 'package:dsh_app/ui/mesh/mesh_page.dart';
 import 'package:dsh_client/dsh_client.dart' show DshConnection;
@@ -7,15 +9,39 @@ import 'package:flutter_test/flutter_test.dart';
 import '../chat/support/harness.dart';
 
 class _FakeMeshApi extends MeshApi {
-  _FakeMeshApi({this.paired = true, this.defaultServer = ''})
-    : super(DshConnection(Uri.parse('http://127.0.0.1:9')));
+  _FakeMeshApi({
+    this.paired = true,
+    this.defaultServer = '',
+    this.pcSessions,
+    this.macOnline = true,
+  }) : super(DshConnection(Uri.parse('http://127.0.0.1:9')));
 
   final bool paired;
   final String defaultServer;
+  final List<Map<String, Object?>>? pcSessions;
+  final bool macOnline;
 
   /// What the page last asked the plugin to link, so a test can assert the
   /// switch really reaches `/link` with the address it showed.
   String? startedWith;
+
+  /// Records `(nodeId, workspaceId)` passed to `createSession`.
+  final List<(String, String)> createdCalls = [];
+  final _pendingStream = Completer<MeshFrames>();
+
+  @override
+  Future<MeshSession> createSession(String nodeId, String workspaceId) async {
+    createdCalls.add((nodeId, workspaceId));
+    return MeshSession(
+      nodeId: nodeId,
+      workspaceId: workspaceId,
+      sessionId: 's-created-${createdCalls.length}',
+      title: '新创建的远端会话',
+      status: 'idle',
+      controllable: true,
+      updatedAt: 999,
+    );
+  }
 
   @override
   Future<MeshStatus> status() async => MeshStatus(
@@ -71,7 +97,7 @@ class _FakeMeshApi extends MeshApi {
           {
             'workspaceId': 'w-orb',
             'title': 'dsh_orb',
-            'sessions': [
+            'sessions': pcSessions ?? [
               {
                 'sessionId': 's-task',
                 'title': '列出桌面文件并分类汇总',
@@ -87,7 +113,7 @@ class _FakeMeshApi extends MeshApi {
         'nodeId': 'mac',
         'name': 'mac-studio',
         'platform': 'darwin',
-        'online': true,
+        'online': macOnline,
         'workspaces': [
           {
             'workspaceId': 'w-mac',
@@ -111,8 +137,14 @@ class _FakeMeshApi extends MeshApi {
   Future<MeshFrames> page(String nodeId, String sessionId) async => const MeshFrames(events: [], cursor: 0);
 
   @override
-  Future<MeshFrames> stream(String nodeId, String sessionId, int since) async =>
-      const MeshFrames(events: [], cursor: 0);
+  Future<MeshFrames> stream(String nodeId, String sessionId, int since) => _pendingStream.future;
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await Scrollable.ensureVisible(tester.element(finder), alignment: 0.5);
+  await tester.pump();
+  await tester.tap(finder);
+  await tester.pump();
 }
 
 void main() {
@@ -242,6 +274,110 @@ void main() {
 
     expect(api.startedWith, 'https://dshorb.top');
     expect(find.textContaining('等待确认'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('expands and collapses long workspace lists and resets to preview after workspace/device toggle', (
+    tester,
+  ) async {
+    usePhoneView(tester);
+    final many = [
+      for (var i = 1; i <= 7; i += 1)
+        {
+          'sessionId': 's-$i',
+          'title': '会话条目 $i',
+          'status': 'idle',
+          'controllable': true,
+          'updatedAt': 100 - i,
+        },
+    ];
+    final api = _FakeMeshApi(pcSessions: many);
+    await tester.pumpWidget(
+      testApp(
+        const MeshPage(),
+        overrides: [meshApiProvider.overrideWithValue(api)],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Expand pc -> initially shows first 5 sessions + "展开其余 2 个会话".
+    await _tapVisible(tester, find.text('win32-asus'));
+    expect(find.text('会话条目 1'), findsOneWidget);
+    expect(find.text('会话条目 5'), findsOneWidget);
+    expect(find.text('会话条目 6'), findsNothing);
+    expect(find.text('展开其余 2 个会话'), findsOneWidget);
+
+    // Expand all -> shows session 6, 7 and bottom "收起" button.
+    await _tapVisible(tester, find.text('展开其余 2 个会话'));
+    expect(find.text('会话条目 6'), findsOneWidget);
+    expect(find.text('会话条目 7'), findsOneWidget);
+    expect(find.text('收起'), findsOneWidget);
+
+    // Tap bottom "收起" -> back to 5-session preview.
+    await _tapVisible(tester, find.text('收起'));
+    expect(find.text('会话条目 6'), findsNothing);
+    expect(find.text('展开其余 2 个会话'), findsOneWidget);
+
+    // Expand all again, then tap workspace folder to collapse whole workspace.
+    await _tapVisible(tester, find.text('展开其余 2 个会话'));
+    expect(find.text('会话条目 7'), findsOneWidget);
+
+    await _tapVisible(tester, find.text('dsh_orb'));
+    expect(find.text('会话条目 1'), findsNothing);
+    expect(find.text('收起'), findsNothing);
+
+    // Re-tap workspace folder -> back to initial 5-session preview, NOT all 7.
+    await _tapVisible(tester, find.text('dsh_orb'));
+    expect(find.text('会话条目 1'), findsOneWidget);
+    expect(find.text('会话条目 5'), findsOneWidget);
+    expect(find.text('会话条目 6'), findsNothing);
+    expect(find.text('展开其余 2 个会话'), findsOneWidget);
+
+    // Expand all, collapse workspace via device switch, then come back -> initial expanded workspace & 5-session preview.
+    await _tapVisible(tester, find.text('展开其余 2 个会话'));
+    await _tapVisible(tester, find.text('dsh_orb'));
+    await _tapVisible(tester, find.text('mac-studio'));
+    await _tapVisible(tester, find.text('win32-asus'));
+    expect(find.text('会话条目 1'), findsOneWidget);
+    expect(find.text('会话条目 6'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('creates a new remote session from the workspace plus button and hides plus for offline peers', (
+    tester,
+  ) async {
+    usePhoneView(tester);
+    final api = _FakeMeshApi(macOnline: false);
+    await tester.pumpWidget(
+      testApp(
+        const MeshPage(),
+        overrides: [meshApiProvider.overrideWithValue(api)],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Offline peer shows no '+' button when expanded.
+    await tester.tap(find.text('mac-studio'));
+    await tester.pump();
+    expect(find.byTooltip('新建对话'), findsNothing);
+
+    // Online peer shows '+' button; tapping creates session and opens MeshSessionPage.
+    await tester.tap(find.text('win32-asus'));
+    await tester.pump();
+    expect(find.byTooltip('新建对话'), findsOneWidget);
+    await tester.tap(find.byTooltip('新建对话'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(api.createdCalls, [('pc', 'w-orb')]);
+    expect(find.text('新创建的远端会话'), findsOneWidget);
+    expect(find.text('输入消息，继续这段远端会话…'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

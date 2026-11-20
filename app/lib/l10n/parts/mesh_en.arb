@@ -50,6 +50,7 @@
   "meshShowLess": "Show less",
   "meshNoSessions": "This workspace has no sessions yet.",
   "meshEmptySession": "This session has no record yet.",
+  "meshNewSession": "New session",
   "meshReasoning": "Reasoning",
   "meshTool": "Tool",
   "meshResult": "Result",

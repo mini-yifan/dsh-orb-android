@@ -18050,6 +18050,12 @@ abstract class L10n {
   /// **'这个会话还没有记录。'**
   String get meshEmptySession;
 
+  /// No description provided for @meshNewSession.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建对话'**
+  String get meshNewSession;
+
   /// No description provided for @meshReasoning.
   ///
   /// In zh, this message translates to:

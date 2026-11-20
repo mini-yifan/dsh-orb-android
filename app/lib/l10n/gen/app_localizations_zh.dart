@@ -9773,6 +9773,9 @@ class L10nZh extends L10n {
   String get meshEmptySession => '这个会话还没有记录。';
 
   @override
+  String get meshNewSession => '新建对话';
+
+  @override
   String get meshReasoning => '思考';
 
   @override

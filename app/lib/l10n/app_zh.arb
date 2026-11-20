@@ -5988,6 +5988,7 @@
   "meshShowLess": "收起",
   "meshNoSessions": "这个工作区还没有会话。",
   "meshEmptySession": "这个会话还没有记录。",
+  "meshNewSession": "新建对话",
   "meshReasoning": "思考",
   "meshTool": "工具",
   "meshResult": "结果",
