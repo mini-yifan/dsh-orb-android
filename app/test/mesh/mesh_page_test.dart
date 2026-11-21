@@ -470,7 +470,7 @@ void main() {
     final api = _FakeMeshApi(
       paired: true,
       defaultServer: 'https://mesh.example',
-      deviceName: '随身手机 (2)',
+      deviceName: '随身手机2',
       deviceNameSaved: true,
     );
     await tester.pumpWidget(
@@ -496,7 +496,7 @@ void main() {
     final nameField = find.widgetWithText(TextField, '本机名称');
     expect(nameField, findsOneWidget);
     // Saved custom name wins over the suggested device model.
-    expect(tester.widget<TextField>(nameField).controller?.text, '随身手机 (2)');
+    expect(tester.widget<TextField>(nameField).controller?.text, '随身手机2');
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
