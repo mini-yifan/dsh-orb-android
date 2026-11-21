@@ -10246,7 +10246,13 @@ class L10nEn extends L10n {
   String get meshRenameHint => 'New name for this phone';
 
   @override
-  String get meshNameEmpty => 'The name cannot be empty.';
+  String get meshDeviceNameLabel => 'This device name';
+
+  @override
+  String get meshDeviceNameHint => 'Enter a name for this device';
+
+  @override
+  String get meshNameEmpty => 'Device name cannot be empty.';
 
   @override
   String get meshOnline => 'Online';

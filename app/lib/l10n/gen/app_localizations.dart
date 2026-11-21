@@ -17966,10 +17966,22 @@ abstract class L10n {
   /// **'新的本机名称'**
   String get meshRenameHint;
 
+  /// No description provided for @meshDeviceNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机名称'**
+  String get meshDeviceNameLabel;
+
+  /// No description provided for @meshDeviceNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入设备名称'**
+  String get meshDeviceNameHint;
+
   /// No description provided for @meshNameEmpty.
   ///
   /// In zh, this message translates to:
-  /// **'名称不能为空。'**
+  /// **'设备名称不能为空。'**
   String get meshNameEmpty;
 
   /// No description provided for @meshOnline.

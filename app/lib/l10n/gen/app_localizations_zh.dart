@@ -9729,7 +9729,13 @@ class L10nZh extends L10n {
   String get meshRenameHint => '新的本机名称';
 
   @override
-  String get meshNameEmpty => '名称不能为空。';
+  String get meshDeviceNameLabel => '本机名称';
+
+  @override
+  String get meshDeviceNameHint => '请输入设备名称';
+
+  @override
+  String get meshNameEmpty => '设备名称不能为空。';
 
   @override
   String get meshOnline => '在线';

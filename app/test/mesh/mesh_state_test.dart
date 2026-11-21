@@ -26,8 +26,12 @@ void main() {
         'peersOnline': 0,
         'peersTotal': 0,
         'defaultServer': 'https://mesh.example',
+        'deviceName': '主力手机',
+        'deviceNameSaved': true,
       });
       expect(status.defaultServer, 'https://mesh.example');
+      expect(status.deviceName, '主力手机');
+      expect(status.deviceNameSaved, isTrue);
 
       final failed = MeshStatus.fromJson({
         'paired': true,

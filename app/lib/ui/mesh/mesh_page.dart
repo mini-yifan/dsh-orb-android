@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/l10n.dart';
 import '../../state/mesh_state.dart';
+import '../../usage/usage_stats.dart';
 import '../common/overview_card.dart';
 import '../common/status_dot.dart';
 import '../settings/settings_widgets.dart';
@@ -45,6 +46,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   }
 
   final _server = TextEditingController();
+  final _deviceName = TextEditingController();
   final _expanded = <String>{};
   final _collapsedWorkspaces = <String>{};
   String? _expandedPeerId;
@@ -61,10 +63,13 @@ class _MeshPageState extends ConsumerState<MeshPage> {
   /// The browser hand-off in flight, if any.
   MeshLinkStart? _link;
   bool _serverTouched = false;
+  bool _deviceNameTouched = false;
+  String _suggestedDeviceModel = '';
 
   @override
   void initState() {
     super.initState();
+    unawaited(_loadDeviceSuggestion());
     unawaited(_refresh());
     _poll = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) unawaited(_refresh(quiet: true));
@@ -76,7 +81,33 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     _poll?.cancel();
     _linkPoll?.cancel();
     _server.dispose();
+    _deviceName.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDeviceSuggestion() async {
+    try {
+      final info = await ref.read(usageDeviceProvider)();
+      final model = info.model.trim();
+      if (!mounted || model.isEmpty) return;
+      setState(() {
+        _suggestedDeviceModel = model;
+        _syncDeviceNameFromStatus(_status);
+      });
+    } catch (_) {}
+  }
+
+  void _syncDeviceNameFromStatus(MeshStatus? status) {
+    if (_deviceNameTouched) return;
+    final fromStatus = status?.deviceName.trim() ?? '';
+    final preferred = (status?.deviceNameSaved == true && fromStatus.isNotEmpty)
+        ? fromStatus
+        : (_suggestedDeviceModel.isNotEmpty
+            ? _suggestedDeviceModel
+            : (fromStatus.isNotEmpty ? fromStatus : 'android-node'));
+    if (_deviceName.text != preferred) {
+      _deviceName.text = preferred;
+    }
   }
 
   Future<void> _refresh({bool quiet = false}) async {
@@ -116,6 +147,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
         if (!_serverTouched && _server.text.trim().isEmpty && fallback.isNotEmpty) {
           _server.text = fallback;
         }
+        _syncDeviceNameFromStatus(status);
       });
     } catch (error) {
       if (!mounted || token != _load) return;
@@ -156,12 +188,17 @@ class _MeshPageState extends ConsumerState<MeshPage> {
       setState(() => _error = context.l10n.meshServerRequired);
       return;
     }
+    final deviceName = _deviceName.text.trim();
+    if (deviceName.isEmpty) {
+      setState(() => _error = context.l10n.meshNameEmpty);
+      return;
+    }
     setState(() {
       _pairingBusy = true;
       _error = null;
     });
     try {
-      final started = await api.startLink(target);
+      final started = await api.startLink(target, name: deviceName);
       if (!mounted) return;
       if (started.approvalUrl.isEmpty) {
         throw const MeshApiException(0, 'link_failed', '');
@@ -202,6 +239,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
       if (!mounted) return;
       if (result.pending) return;
       _linkPoll?.cancel();
+      _deviceNameTouched = false;
       setState(() {
         _link = null;
         _status = result.status ?? _status;
@@ -243,6 +281,7 @@ class _MeshPageState extends ConsumerState<MeshPage> {
     if (api == null) return;
     try {
       await api.unpair();
+      _deviceNameTouched = false;
       await _refresh();
     } catch (error) {
       if (mounted) setState(() => _error = _errorText(error));
@@ -392,6 +431,19 @@ class _MeshPageState extends ConsumerState<MeshPage> {
               border: const OutlineInputBorder(),
             ),
             onChanged: (_) => setState(() => _serverTouched = true),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: TextField(
+            controller: _deviceName,
+            enabled: !_pairingBusy && !linking,
+            decoration: InputDecoration(
+              labelText: l10n.meshDeviceNameLabel,
+              hintText: l10n.meshDeviceNameHint,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() => _deviceNameTouched = true),
           ),
         ),
         if (linking) ...[

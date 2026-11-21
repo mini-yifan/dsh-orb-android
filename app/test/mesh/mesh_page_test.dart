@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dsh_app/state/mesh_state.dart';
 import 'package:dsh_app/ui/mesh/mesh_page.dart';
+import 'package:dsh_app/usage/usage_ledger.dart';
+import 'package:dsh_app/usage/usage_stats.dart';
 import 'package:dsh_client/dsh_client.dart' show DshConnection;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,16 +16,21 @@ class _FakeMeshApi extends MeshApi {
     this.defaultServer = '',
     this.pcSessions,
     this.macOnline = true,
+    this.deviceName = '',
+    this.deviceNameSaved = false,
   }) : super(DshConnection(Uri.parse('http://127.0.0.1:9')));
 
-  final bool paired;
+  bool paired;
   final String defaultServer;
   final List<Map<String, Object?>>? pcSessions;
   final bool macOnline;
+  String deviceName;
+  bool deviceNameSaved;
 
   /// What the page last asked the plugin to link, so a test can assert the
   /// switch really reaches `/link` with the address it showed.
   String? startedWith;
+  String? startedName;
 
   /// Records `(nodeId, workspaceId)` passed to `createSession`.
   final List<(String, String)> createdCalls = [];
@@ -47,21 +54,47 @@ class _FakeMeshApi extends MeshApi {
   Future<MeshStatus> status() async => MeshStatus(
     paired: paired,
     serverUrl: 'https://mesh.example',
-    node: const MeshNode(nodeId: 'phone', name: 'Phone', platform: 'android', online: true, self: true),
+    node: paired
+        ? MeshNode(
+            nodeId: 'phone',
+            name: deviceName.isEmpty ? 'Phone' : deviceName,
+            platform: 'android',
+            online: true,
+            self: true,
+          )
+        : null,
     connection: paired ? 'connected' : 'unpaired',
     peersOnline: paired ? 1 : 0,
     peersTotal: paired ? 1 : 0,
     defaultServer: defaultServer,
+    deviceName: deviceName,
+    deviceNameSaved: deviceNameSaved,
   );
 
   @override
   Future<MeshLinkStart> startLink(String serverUrl, {String? name}) async {
     startedWith = serverUrl;
+    startedName = name;
+    if (name != null && name.trim().isNotEmpty) {
+      deviceName = name.trim();
+      deviceNameSaved = true;
+    }
     return const MeshLinkStart(
       approvalUrl: 'https://mesh.example/app/link/link-1',
       linkId: 'link-1',
       expiresAt: 4102444800000,
     );
+  }
+
+  @override
+  Future<void> rename(String name) async {
+    deviceName = name.trim();
+    deviceNameSaved = true;
+  }
+
+  @override
+  Future<void> unpair() async {
+    paired = false;
   }
 
   @override
@@ -378,6 +411,92 @@ void main() {
     expect(api.createdCalls, [('pc', 'w-orb')]);
     expect(find.text('新创建的远端会话'), findsOneWidget);
     expect(find.text('输入消息，继续这段远端会话…'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('prefills model default name when unsaved, blocks empty name, and sends custom name on join', (
+    tester,
+  ) async {
+    usePhoneView(tester);
+    final api = _FakeMeshApi(
+      paired: false,
+      defaultServer: 'https://mesh.example',
+      deviceName: 'android-node',
+      deviceNameSaved: false,
+    );
+    await tester.pumpWidget(
+      testApp(
+        const MeshPage(),
+        overrides: [
+          meshApiProvider.overrideWithValue(api),
+          usageDeviceProvider.overrideWithValue(
+            () async => const UsageDevice(app: '1.0.0', maker: 'oneplus', model: 'gm1910'),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final nameField = find.widgetWithText(TextField, '本机名称');
+    expect(nameField, findsOneWidget);
+    expect(tester.widget<TextField>(nameField).controller?.text, 'gm1910');
+
+    // Clearing device name prevents starting link and shows validation error.
+    await tester.enterText(nameField, '   ');
+    await tester.pump();
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(find.text('设备名称不能为空。'), findsOneWidget);
+    expect(api.startedWith, isNull);
+
+    // Entering a custom name passes it to startLink and persists it.
+    await tester.enterText(nameField, '主力手机');
+    await tester.pump();
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(api.startedWith, 'https://mesh.example');
+    expect(api.startedName, '主力手机');
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('restores persisted device name into join field after leaving interconnect', (tester) async {
+    usePhoneView(tester);
+    final api = _FakeMeshApi(
+      paired: true,
+      defaultServer: 'https://mesh.example',
+      deviceName: '随身手机 (2)',
+      deviceNameSaved: true,
+    );
+    await tester.pumpWidget(
+      testApp(
+        const MeshPage(),
+        overrides: [
+          meshApiProvider.overrideWithValue(api),
+          usageDeviceProvider.overrideWithValue(
+            () async => const UsageDevice(app: '1.0.0', maker: 'oneplus', model: 'gm1910'),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await _tapVisible(tester, find.text('退出互联'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '退出互联'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final nameField = find.widgetWithText(TextField, '本机名称');
+    expect(nameField, findsOneWidget);
+    // Saved custom name wins over the suggested device model.
+    expect(tester.widget<TextField>(nameField).controller?.text, '随身手机 (2)');
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

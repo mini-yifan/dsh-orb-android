@@ -157,6 +157,8 @@ class MeshStatus {
     this.peersTotal = 0,
     this.error,
     this.defaultServer = '',
+    this.deviceName = '',
+    this.deviceNameSaved = false,
   });
 
   factory MeshStatus.fromJson(Object? raw) {
@@ -174,6 +176,8 @@ class MeshStatus {
       peersTotal: _integer(json['peersTotal']),
       error: error.isEmpty ? null : error,
       defaultServer: _string(json['defaultServer']),
+      deviceName: _string(json['deviceName']),
+      deviceNameSaved: json['deviceNameSaved'] == true,
     );
   }
 
@@ -192,6 +196,12 @@ class MeshStatus {
   /// Origin the sign-in switch offers first. Empty means the deployment bundled
   /// none and the address field has to be filled in.
   final String defaultServer;
+
+  /// Resolved local device name (saved custom name, active node name, or default).
+  final String deviceName;
+
+  /// Whether a custom or confirmed device name is already persisted on device.
+  final bool deviceNameSaved;
 
   bool get connected => connection == 'connected';
 }
