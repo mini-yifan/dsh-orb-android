@@ -268,7 +268,7 @@ def main() -> None:
         "title": f"DSH Orb {name}",
         "publishedAt": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "notes": args.notes.read_text(encoding="utf-8").strip() if args.notes else "",
-        "page": f"https://github.com/{REPO}/releases/tag/{tag}",
+        "page": "https://www.dshorb.top/",
         "assets": assets,
     }
     if patches:

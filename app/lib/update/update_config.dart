@@ -28,7 +28,7 @@ const updateRepo = 'mini-yifan/dsh-orb-android';
 final githubLatestApi = Uri.parse('https://api.github.com/repos/$updateRepo/releases/latest');
 
 /// The download / release landing page opened in the browser.
-final githubReleasesPage = Uri.parse('https://dshorb.top');
+final githubReleasesPage = Uri.parse('https://www.dshorb.top/');
 
 /// A file attached to the latest release.
 Uri githubLatestAsset(String name) => Uri.parse('https://github.com/$updateRepo/releases/latest/download/$name');

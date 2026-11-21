@@ -228,6 +228,21 @@ npx wrangler r2 object put dshgo-share/beta/update.json --file prev.json --conte
 
 **限制**：令牌编在 APK 里，拿到 APK 的人能取出来，所以它挡的是「没有安装包的人」，不是装过的人；泄露了就按上表换令牌。没有令牌的旧包（包括 0.9.1）不会走内测通道，要用户在页面上手动下载一次带令牌的新包。
 
+## 发布到自托管下载源（dshorb.top，当前主分发口）
+
+App 的应用内更新读 `https://dshorb.top/app/update.json`，下载 `https://dshorb.top/app/download/<tag 去掉 v>/<文件>`（origin 编译在 `app/lib/update/update_config.dart` 的 `updateDownloadOrigin`；release 构建没有备用源，这条链路就是唯一分发口）。GitHub Release 只留档，用户不可见（仓库私有）。
+
+发版最后一步用 `tooling/publish_download.py` 把 `dist/` 推到服务器：
+
+```sh
+python3 tooling/publish_download.py            # 发布 dist/（ssh 别名 dsh-mesh）
+python3 tooling/publish_download.py --dry-run  # 只打印计划与本地校验
+```
+
+脚本会：校验 `dist/update.json` 与 APK 的 sha256/size 逐字一致（拦住「清单比 APK 新」的半成品发布）→ tar + scp 上传 → 在服务器 `/opt/dsh-orb-site/downloads/app/` 解到 `download/<tag 去掉 v>/`、刷新根级 `update.json`、重建 `download/latest/dsh-orb-latest-arm64.apk` 软链 → 远端 sha256 复核。官网下载区读同一个 `update.json`，发布后自动显示新版本，无需改网页。
+
+服务器侧布局与容器（独立部署单元 `/opt/dsh-orb-site`，caddy 只把 `/app/update.json` 与 `/app/download/*` 转给它，portal 的 `/app/*` 页面路由不受影响）见官网仓库 `dsh-orb-site/README.md`。
+
 ## 多线路分发（本仓库不适用）
 
 上游 DSH Go 有「国内 / 海外 / GitHub 三条线路」的分发体系：`services/share-worker`（Cloudflare Worker）、公开下载桶 `dl.dshtui.com`（R2）、香港对象存储、以及 `go.dshtui.com` 下载页。
