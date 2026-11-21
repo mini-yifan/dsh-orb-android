@@ -1,6 +1,6 @@
 # DSH Orb 使用说明 · User guide
 
-> dsh-go 0.1.2
+> dsh-go 0.1.3
 
 ## 中文
 
