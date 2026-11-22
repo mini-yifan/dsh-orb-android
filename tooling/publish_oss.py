@@ -144,6 +144,9 @@ aliyun oss cp {zip_name} oss://{BUCKET}/app/download/{version}/{zip_name} -f >/d
 aliyun oss cp SHA256SUMS oss://{BUCKET}/app/download/{version}/SHA256SUMS -f >/dev/null
 mkdir -p {MIRROR}/download/{version}
 cp {bin_name} {zip_name} update.json SHA256SUMS {MIRROR}/download/{version}/
+# 官网直接下载 APK（服务器的 Caddy 允许 .apk）；硬链接省一份空间。
+ln {bin_name[:-4]}.apk {MIRROR}/download/{version}/{bin_name[:-4]}.apk 2>/dev/null || cp {bin_name[:-4]}.apk {MIRROR}/download/{version}/
+ln -sfn ../{version}/{bin_name[:-4]}.apk {MIRROR}/download/latest/dsh-orb-latest-arm64.apk
 cp update.json {MIRROR}/update.json
 rm -rf /tmp/orb-pub
 echo -n 'oss manifest: '; curl -s {PUBLIC}/app/update.json | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["version"], d["assets"]["arm64"]["name"])'

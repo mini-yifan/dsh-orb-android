@@ -242,9 +242,12 @@ npx wrangler r2 object put dshgo-share/beta/update.json --file prev.json --conte
 **为什么需要加速镜像**：手机实测 `github.com` 的 release 资源域名会被重置（40 秒 0 字节），
 而三个加速镜像可用（实测 0.5–5 MB/s）。海外网络可以直连 GitHub，镜像同样可用。
 
-**为什么文件叫 `.bin`**：OSS 默认域名禁止公开分发 `.apk`（`ApkDownloadForbidden`），而 OSS 是兜底源，
+**为什么更新包叫 `.bin`**：OSS 默认域名禁止公开分发 `.apk`（`ApkDownloadForbidden`），而 OSS 是兜底源，
 所以 GitHub 资产与清单统一用 `.bin`（Android 按内容安装，真机 `pm install x.bin` 验证过）。
 GitHub 上同时上传 `.apk`，方便人工下载与后续增量补丁生成。
+
+**官网下载不经过 OSS**：官网由自己的服务器（Caddy）直接提供 `.apk`，
+`/app/download/<版本>/dsh-orb-<版本>-arm64.apk`。OSS 上的 `.zip` 只是合规兜底副本，官网不引用它。
 
 发版：
 
