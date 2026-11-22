@@ -37,9 +37,9 @@ This repository holds the Android app. The desktop plugin is a separate project;
 Alternatively, use [GitHub Releases](https://github.com/mini-yifan/dsh-orb-android/releases/latest) and download `dsh-orb-<version>-arm64.apk`.
 
 - **Android only for now**: Android 8.0 (API 26) or later, arm64 builds only. iOS and HarmonyOS versions are planned.
-- Downloads from the website and from the in-app updater are checked against the manifest's SHA-256, and installation goes through Android's PackageInstaller.
+- The website lists the APK's SHA-256; the in-app updater verifies the download against the manifest before installation goes through Android's PackageInstaller.
 - If an earlier test build with a different signature is installed, it cannot be updated in place: uninstall it first, which erases chats, the Linux environment and settings.
-- Running DSH on the phone needs a one-time runtime download; leave about 1 GB free. If you only connect to a remote host, you can skip it.
+- Running DSH on the phone needs a one-time runtime download; keep the free space the app asks for. If you only connect to a remote host, you can skip it.
 
 ### Desktop plugin
 

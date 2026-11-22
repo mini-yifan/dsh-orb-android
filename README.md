@@ -37,9 +37,9 @@ DSH Orb 是一个围绕 [DeepSeek Harness](https://github.com/deepseek-ai/deepse
 备用入口是 [GitHub Releases](https://github.com/mini-yifan/dsh-orb-android/releases/latest)，下载 `dsh-orb-<版本>-arm64.apk`。
 
 - 当前**只有 Android 版本**：Android 8.0（API 26）及以上，官方发布只提供 arm64 包。iOS 和鸿蒙版本在计划中。
-- 官网和应用内更新下载的包 SHA-256 会与清单核对，安装由系统 PackageInstaller 完成。
+- 官网页面列出安装包的 SHA-256；应用内更新下载完会与清单核对，安装由系统 PackageInstaller 完成。
 - 如果手机上装过签名不同的早期测试包，不能直接覆盖安装，需要先卸载旧版；卸载会清空对话、Linux 环境和设置。
-- 首次在本机运行要先下载运行环境，建议预留约 1 GB 空间；只连电脑或服务器上的 DSH 可以不装。
+- 首次在本机运行要先下载运行环境，按 App 提示预留空间；只连电脑或服务器上的 DSH 可以不装。
 
 ### 桌面插件
 
