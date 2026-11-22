@@ -118,8 +118,6 @@ ZIPSHA=$(sha256sum {zip_name} | cut -d' ' -f1)
 printf '%s  %s\\n%s  %s\\n' "$BINSHA" {bin_name} "$ZIPSHA" {zip_name} > SHA256SUMS
 aliyun oss cp {zip_name} oss://{BUCKET}/app/download/{version}/{zip_name} -f >/dev/null
 aliyun oss cp SHA256SUMS oss://{BUCKET}/app/download/{version}/SHA256SUMS -f >/dev/null
-aliyun oss cp {bin_name} oss://{BUCKET}/app/download/latest/dsh-orb-latest-arm64.bin -f >/dev/null
-aliyun oss cp {zip_name} oss://{BUCKET}/app/download/latest/dsh-orb-latest-arm64.zip -f >/dev/null
 mkdir -p {MIRROR}/download/{version}
 cp {bin_name} {zip_name} update.json SHA256SUMS {MIRROR}/download/{version}/
 cp update.json {MIRROR}/update.json
