@@ -40,9 +40,12 @@ Uri githubReleaseAsset(String tag, String name) =>
 /// Optional channel host for DSH Orb.
 const updateMirrorOrigin = 'https://dshorb.top';
 
-/// DSH Orb's self-hosted update origin: `/update.json` and
-/// `/download/<version>/<file>` under `https://dshorb.top/app`.
-const updateDownloadOrigin = 'https://dshorb.top/app';
+/// DSH Orb's update origin: `/update.json` and `/download/<version>/<file>`.
+/// Hosted on an Aliyun OSS bucket: the dshorb.top deployment is not ICP-filed,
+/// so direct HTTPS to it is reset on some networks, while the OSS endpoint is
+/// reachable and does not require filing. APKs are stored with a `.bin`
+/// extension because OSS refuses to serve `.apk` from a default endpoint.
+const updateDownloadOrigin = 'https://dsh-orb-release.oss-cn-beijing.aliyuncs.com/app';
 
 /// The beta channel: `<origin>/beta/update.json` and `<origin>/beta/<version>/<file>`,
 /// both behind `Authorization: Bearer <token>`. The token is compiled into beta

@@ -228,20 +228,36 @@ npx wrangler r2 object put dshgo-share/beta/update.json --file prev.json --conte
 
 **限制**：令牌编在 APK 里，拿到 APK 的人能取出来，所以它挡的是「没有安装包的人」，不是装过的人；泄露了就按上表换令牌。没有令牌的旧包（包括 0.9.1）不会走内测通道，要用户在页面上手动下载一次带令牌的新包。
 
-## 发布到自托管下载源（dshorb.top，当前主分发口）
+## 发布到更新源（阿里云 OSS，当前唯一分发口）
 
-App 的应用内更新读 `https://dshorb.top/app/update.json`，下载 `https://dshorb.top/app/download/<tag 去掉 v>/<文件>`（origin 编译在 `app/lib/update/update_config.dart` 的 `updateDownloadOrigin`；release 构建没有备用源，这条链路就是唯一分发口）。GitHub Release 只留档，用户不可见（仓库私有）。
+应用内更新读 `https://dsh-orb-release.oss-cn-beijing.aliyuncs.com/app/update.json`，下载
+`…/app/download/<tag 去掉 v>/<文件>`（origin 编译在 `app/lib/update/update_config.dart` 的
+`updateDownloadOrigin`；release 构建没有备用源）。
 
-发版最后一步用 `tooling/publish_download.py` 把 `dist/` 推到服务器：
+**为什么不是 dshorb.top：** 这个域名没有 ICP 备案，国内不少网络会在 TLS 握手阶段直接重置到它的
+443 连接；手机实测过「检查更新 → 暂时检查不了」。阿里云 OSS 的默认域名不需要备案，国内可直连。
+
+**为什么文件叫 `.bin`：** OSS 默认域名禁止公开分发 `.apk`（`ApkDownloadForbidden`，要求改用已备案
+的 CNAME 域名）。Android 按内容安装、不看扩展名（真机 `pm install x.bin` 验证过），所以更新清单里
+的 asset name 用 `.bin`；官网给用户下载的是 `<版本>.zip`（内含 `.apk`），解压后安装。
+
+发版最后一步：
 
 ```sh
-python3 tooling/publish_download.py            # 发布 dist/（ssh 别名 dsh-mesh）
-python3 tooling/publish_download.py --dry-run  # 只打印计划与本地校验
+python3 tooling/publish_oss.py --dry-run   # 本地校验并打印计划
+python3 tooling/publish_oss.py             # 直传 OSS + 服务器生成 zip/镜像
 ```
 
-脚本会：校验 `dist/update.json` 与 APK 的 sha256/size 逐字一致（拦住「清单比 APK 新」的半成品发布）→ tar + scp 上传 → 在服务器 `/opt/dsh-orb-site/downloads/app/` 解到 `download/<tag 去掉 v>/`、刷新根级 `update.json`、重建 `download/latest/dsh-orb-latest-arm64.apk` 软链 → 远端 sha256 复核。官网下载区读同一个 `update.json`，发布后自动显示新版本，无需改网页。
+依赖：`oss2`（`pip3 install oss2`）与本机 `~/.dsh-orb/private/oss-ram.csv`（RAM AccessKey，仅
+`dsh-orb-release` 桶的读写）。脚本流程：
 
-服务器侧布局与容器（独立部署单元 `/opt/dsh-orb-site`，caddy 只把 `/app/update.json` 与 `/app/download/*` 转给它，portal 的 `/app/*` 页面路由不受影响）见官网仓库 `dsh-orb-site/README.md`。
+1. 校验 `dist/update.json` 与 APK 的 sha256/size 逐字一致；
+2. 本机把 APK 复制成 `.bin`、改写清单里的 asset name，用 OSS SDK 分片直传（约 2 分钟 / 200MB）；
+3. 服务器从 OSS 取回 `.bin`、生成 `.zip`、回传 OSS，并同步一份到 `dshorb.top` 的镜像目录与
+   `/opt/dsh-orb-site/downloads/app/update.json`。
+
+官网（OSS 根目录）与 `dshorb.top` 用**同一份构建**：站点里的更新源和下载链接都是相对路径
+（`/app/update.json`、`/app/download/...`），各自读自己域名下的那份清单。
 
 ## 多线路分发（本仓库不适用）
 
