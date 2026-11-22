@@ -228,38 +228,37 @@ npx wrangler r2 object put dshgo-share/beta/update.json --file prev.json --conte
 
 **限制**：令牌编在 APK 里，拿到 APK 的人能取出来，所以它挡的是「没有安装包的人」，不是装过的人；泄露了就按上表换令牌。没有令牌的旧包（包括 0.9.1）不会走内测通道，要用户在页面上手动下载一次带令牌的新包。
 
-## 发布到更新源（阿里云 OSS，当前唯一分发口）
+## 发布到更新源（GitHub Releases + 加速镜像，OSS 兜底）
 
-应用内更新读 `https://dsh-orb-release.oss-cn-beijing.aliyuncs.com/app/update.json`，下载
-`…/app/download/<tag 去掉 v>/<文件>`（origin 编译在 `app/lib/update/update_config.dart` 的
-`updateDownloadOrigin`；release 构建没有备用源）。
+应用内更新的层次：
 
-**为什么不是 dshorb.top：** 这个域名没有 ICP 备案，国内不少网络会在 TLS 握手阶段直接重置到它的
-443 连接；手机实测过「检查更新 → 暂时检查不了」。阿里云 OSS 的默认域名不需要备案，国内可直连。
+1. **清单**：`https://dsh-orb-release.oss-cn-beijing.aliyuncs.com/app/update.json`（OSS，约 1.6 KB，
+   流量可忽略）。OSS 不可达时，会尝试 `releases/latest/download/update.json` 经内置加速镜像的副本。
+2. **安装包**：清单里的 asset 没有写 `url`，App 会推导出 GitHub Release 的下载地址，然后按顺序尝试
+   `gh-proxy.com` → `ghfast.top` → `ghproxy.net`（见 `update_config.dart` 的 `publicMirrors`），
+   全部失败才回退到 OSS 的 `/app/download/<版本>/<文件>`。
+3. **校验**：下载完成后校验清单里的 SHA-256，安装前再校验 APK 签名；加速镜像无法伪造包。
 
-**为什么文件叫 `.bin`：** OSS 默认域名禁止公开分发 `.apk`（`ApkDownloadForbidden`，要求改用已备案
-的 CNAME 域名）。Android 按内容安装、不看扩展名（真机 `pm install x.bin` 验证过），所以更新清单里
-的 asset name 用 `.bin`；官网给用户下载的是 `<版本>.zip`（内含 `.apk`），解压后安装。
+**为什么需要加速镜像**：手机实测 `github.com` 的 release 资源域名会被重置（40 秒 0 字节），
+而三个加速镜像可用（实测 0.5–5 MB/s）。海外网络可以直连 GitHub，镜像同样可用。
 
-发版最后一步：
+**为什么文件叫 `.bin`**：OSS 默认域名禁止公开分发 `.apk`（`ApkDownloadForbidden`），而 OSS 是兜底源，
+所以 GitHub 资产与清单统一用 `.bin`（Android 按内容安装，真机 `pm install x.bin` 验证过）。
+GitHub 上同时上传 `.apk`，方便人工下载与后续增量补丁生成。
+
+发版：
 
 ```sh
-python3 tooling/publish_oss.py --dry-run   # 本地校验并打印计划
-python3 tooling/publish_oss.py             # 直传 OSS + 服务器生成 zip/镜像
+python3 tooling/release_assets.py --notes notes.md --delta-from 0
+python3 tooling/publish_oss.py --dry-run   # 校验并打印计划
+python3 tooling/publish_oss.py             # OSS + 服务器 zip/镜像 + GitHub Release
 ```
 
-依赖：`oss2`（`pip3 install oss2`）与本机 `~/.dsh-orb/private/oss-ram.csv`（RAM AccessKey，仅
-`dsh-orb-release` 桶的读写）。脚本流程：
+`publish_oss.py` 依赖 `oss2` 与 `~/.dsh-orb/private/oss-ram.csv`，并用 `gh` 创建/更新
+`mini-yifan/dsh-orb-android` 的 Release。**`gh` 会把 fork 解析成上游仓库**，脚本里所有命令都显式带
+`--repo mini-yifan/dsh-orb-android`；手动执行时也要带。
 
-1. 校验 `dist/update.json` 与 APK 的 sha256/size 逐字一致；
-2. 本机把 APK 复制成 `.bin`、改写清单里的 asset name，用 OSS SDK 分片直传（约 2 分钟 / 200MB）；
-3. 服务器从 OSS 取回 `.bin`、生成 `.zip`、回传 OSS，并同步一份到 `dshorb.top` 的镜像目录与
-   `/opt/dsh-orb-site/downloads/app/update.json`。
 
-官网（OSS 根目录）与 `dshorb.top` 用**同一份构建**：站点里的更新源和下载链接都是相对路径
-（`/app/update.json`、`/app/download/...`），各自读自己域名下的那份清单。
-
-## 多线路分发（本仓库不适用）
 
 上游 DSH Go 有「国内 / 海外 / GitHub 三条线路」的分发体系：`services/share-worker`（Cloudflare Worker）、公开下载桶 `dl.dshtui.com`（R2）、香港对象存储、以及 `go.dshtui.com` 下载页。
 

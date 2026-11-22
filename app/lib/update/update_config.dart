@@ -134,9 +134,16 @@ class UpdateMirror {
   }
 }
 
-/// DSH Orb updates come solely from [updateDownloadOrigin] (`dshorb.top/app`);
-/// no third-party GitHub accelerators are bundled.
-const publicMirrors = <UpdateMirror>[];
+/// Release packages live on GitHub Releases (free); mainland networks often
+/// cannot reach the asset host directly, so downloads go through these
+/// accelerators first. [updateDownloadOrigin] (the OSS copy) stays last as the
+/// fallback when every accelerator fails. Integrity is unaffected: the sha256
+/// in the manifest and the APK signature are checked after download.
+const publicMirrors = <UpdateMirror>[
+  UpdateMirror(id: 'ghproxy', label: 'gh-proxy.com', prefix: 'https://gh-proxy.com/'),
+  UpdateMirror(id: 'ghfast', label: 'ghfast.top', prefix: 'https://ghfast.top/'),
+  UpdateMirror(id: 'ghproxynet', label: 'ghproxy.net', prefix: 'https://ghproxy.net/'),
+];
 
 const _unset = '\u0000';
 const _mirrorDefine = String.fromEnvironment('DSH_UPDATE_MIRROR', defaultValue: updateDownloadOrigin);
@@ -179,7 +186,9 @@ UpdateSources buildUpdateSources({
     channel: UpdateChannel.tryCreate(token: channelToken, origin: channelOrigin),
     feed: feedUrl.isEmpty ? null : Uri.tryParse(feedUrl),
     useGithubApi: useGithubApi,
-    mirrors: [?own, ...public],
+    // Accelerators first: their downloads are not billed, while the OSS copy
+    // (own) costs egress and only exists as the last-resort fallback.
+    mirrors: [...public, ?own],
   );
 }
 

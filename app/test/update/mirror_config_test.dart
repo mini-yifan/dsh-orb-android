@@ -1,228 +1,80 @@
-// Update sources without a beta channel token: our copy of the release files
-// on dl.dshtui.com first, then GitHub and its accelerators, the GitHub API
-// last; never go.dshtui.com. The copy can be moved or dropped at build time
-// (DSH_UPDATE_MIRROR).
+// DSH Orb's update sources: the self-hosted manifest (OSS copy) is the feed;
+// release files live on GitHub Releases and are downloaded through the bundled
+// accelerators first, with the OSS copy as the last-resort fallback.
 
-import 'dart:convert';
-
-import 'package:dsh_app/update/checker.dart';
-import 'package:dsh_app/update/release.dart';
 import 'package:dsh_app/update/update_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support.dart';
-
-const _api = 'https://api.github.com/repos/ccch1mneyyy/dsh-go/releases/latest';
-const _apk = 'dsh-go-0.9.0-arm64.apk';
-const _githubApk = 'https://github.com/ccch1mneyyy/dsh-go/releases/download/v0.9.0/$_apk';
-const _manifest = 'https://github.com/ccch1mneyyy/dsh-go/releases/latest/download/update.json';
-const _dlFeed = 'https://dl.dshtui.com/update.json';
-const _dlApk = 'https://dl.dshtui.com/download/0.9.0/$_apk';
-const _mirror = 'https://dl.example.com';
-const _mirrorFeed = '$_mirror/update.json';
-const _mirrorApk = '$_mirror/download/0.9.0/$_apk';
+const _oss = 'https://dsh-orb-release.oss-cn-beijing.aliyuncs.com/app';
+const _feed = '$_oss/update.json';
+const _apk = 'dsh-orb-0.1.7-arm64.bin';
+const _githubApk = 'https://github.com/mini-yifan/dsh-orb-android/releases/download/v0.1.7/$_apk';
+const _ossApk = '$_oss/download/0.1.7/$_apk';
 
 void main() {
   group('defaults', () {
     final sources = buildUpdateSources();
 
-    test('dl.dshtui.com, then GitHub and the accelerators, the API last; nothing on go.dshtui.com', () {
+    test('feed is the self-hosted manifest; accelerators come before the OSS copy', () {
       expect(sources.channel, isNull);
-      expect(sources.feed.toString(), _dlFeed);
-      expect(sources.mirrors.map((m) => m.id), ['dshgo', 'github', 'ghfast', 'gh-proxy']);
-      final endpoints = sources.metadataEndpoints();
-      expect(endpoints.map((e) => e.id), ['feed', 'manifest:github', 'manifest:ghfast', 'manifest:gh-proxy', 'api']);
-      expect(endpoints.map((e) => e.url.toString()).take(3), [_dlFeed, _manifest, 'https://ghfast.top/$_manifest']);
-      expect(endpoints.every((e) => e.headers.isEmpty), isTrue);
-      final urls = sources.downloadUrls([Uri.parse(_githubApk)]);
-      expect(urls.map((u) => u.url.toString()), [
-        _dlApk,
-        _githubApk,
-        'https://ghfast.top/$_githubApk',
-        'https://gh-proxy.com/$_githubApk',
-      ]);
-      expect(urls.first.label, 'dl.dshtui.com');
-      expect(urls.every((u) => u.headers.isEmpty), isTrue);
-      expect([for (final e in endpoints) e.url.host], isNot(contains('go.dshtui.com')));
+      expect(sources.feed.toString(), _feed);
+      expect(sources.mirrors.map((m) => m.id), ['ghproxy', 'ghfast', 'ghproxynet', 'dshgo']);
+      // The OSS copy first; each accelerator can also proxy the GitHub-hosted
+      // `update.json` release asset if the OSS feed is down.
+      expect(sources.metadataEndpoints().map((e) => e.id),
+          ['feed', 'manifest:ghproxy', 'manifest:ghfast', 'manifest:ghproxynet']);
+      expect(sources.useGithubApi, isFalse);
     });
 
-    test('the shipped configuration (no token in tests) is the same', () {
+    test('a GitHub release file is fetched through each accelerator, then the OSS copy', () {
+      final urls = sources.downloadUrls([Uri.parse(_githubApk)]);
+      expect(urls.map((u) => u.url.toString()), [
+        'https://gh-proxy.com/$_githubApk',
+        'https://ghfast.top/$_githubApk',
+        'https://ghproxy.net/$_githubApk',
+        _ossApk,
+      ]);
+      expect(urls.map((u) => u.mirrorId), ['ghproxy', 'ghfast', 'ghproxynet', 'dshgo']);
+    });
+
+    test('a URL that is already on our own host is left alone', () {
+      final urls = sources.downloadUrls([Uri.parse(_ossApk)]);
+      expect(urls.map((u) => u.url.toString()), [_ossApk]);
+      expect(urls.single.mirrorId, isNull);
+    });
+
+    test('the shipped configuration is the same as the builder default', () {
       final shipped = defaultUpdateSources();
-      expect(shipped.channel, isNull);
-      expect(shipped.feed.toString(), _dlFeed);
-      expect(shipped.metadataEndpoints().map((e) => e.id), sources.metadataEndpoints().map((e) => e.id));
+      expect(shipped.feed.toString(), _feed);
       expect(shipped.mirrors.map((m) => m.id), sources.mirrors.map((m) => m.id));
     });
-
-    test('the API is not moved ahead by having answered last time; the others are', () {
-      expect(sources.metadataEndpoints(preferred: 'api').map((e) => e.id).first, 'feed');
-      expect(sources.metadataEndpoints(preferred: 'api').last.id, 'api');
-      expect(sources.metadataEndpoints(preferred: 'manifest:gh-proxy').map((e) => e.id), [
-        'manifest:gh-proxy',
-        'feed',
-        'manifest:github',
-        'manifest:ghfast',
-        'api',
-      ]);
-    });
-
-    test('our update.json answers: its APK URL, nothing else asked', () async {
-      final manifest = jsonEncode({
-        'schema': 1,
-        'version': '0.9.0+10251518',
-        'tag': 'v0.9.0',
-        'assets': {
-          'arm64': {'name': _apk, 'size': 185254217, 'sha256': '1c' * 32, 'url': _dlApk},
-        },
-      });
-      final http = FakeHttp({_dlFeed: (_, _) => textResponse(manifest)});
-      final result = await UpdateChecker(http: http, sources: sources).check(preferred: 'api');
-      expect(http.urls, [_dlFeed]);
-      final found = result as CheckFound;
-      expect(found.endpoint.id, 'feed');
-      final urls = sources.downloadUrls([found.release.apks[ApkFlavor.arm64]!.url, Uri.parse(_githubApk)]);
-      expect(urls.map((u) => u.url.toString()).take(2), [_dlApk, _githubApk]);
-    });
-
-    test('ours is down: GitHub\'s update.json, then each accelerator, then the API', () async {
-      var http = FakeHttp({_manifest: (_, _) => textResponse(fixture('update.json'))});
-      var result = await UpdateChecker(http: http, sources: sources).check();
-      expect(http.urls, [_dlFeed, _manifest]);
-      expect((result as CheckFound).endpoint.id, 'manifest:github');
-
-      // ghfast.top refusing a network (403) costs one request.
-      http = FakeHttp({
-        _dlFeed: (_, _) => textResponse('<html>502</html>', status: 502),
-        'https://ghfast.top/$_manifest': (_, _) => textResponse('Forbidden', status: 403),
-        'https://gh-proxy.com/$_manifest': (_, _) => textResponse(fixture('update.json')),
-      });
-      result = await UpdateChecker(http: http, sources: sources).check();
-      expect((result as CheckFound).endpoint.id, 'manifest:gh-proxy');
-      expect(http.urls, isNot(contains(_api)));
-
-      http = FakeHttp({_api: (_, _) => textResponse(fixture('github_release.json'))});
-      result = await UpdateChecker(http: http, sources: sources).check();
-      expect(http.urls, [_dlFeed, _manifest, 'https://ghfast.top/$_manifest', 'https://gh-proxy.com/$_manifest', _api]);
-      expect((result as CheckFound).endpoint.id, 'api');
-    });
   });
 
-  group('another copy of the release files (DSH_UPDATE_MIRROR)', () {
-    final sources = buildUpdateSources(mirror: '$_mirror/');
-
-    test('its update.json comes first, then GitHub; downloads try it first', () {
-      expect(sources.feed.toString(), _mirrorFeed);
-      expect(sources.mirrors.map((m) => m.id), ['dshgo', 'github', 'ghfast', 'gh-proxy']);
+  group('build-time overrides', () {
+    test('moving the self-hosted copy keeps it as the last fallback', () {
+      final sources = buildUpdateSources(mirror: 'https://dl.example.com');
+      expect(sources.feed.toString(), 'https://dl.example.com/update.json');
+      expect(sources.mirrors.last.id, 'dshgo');
       final urls = sources.downloadUrls([Uri.parse(_githubApk)]);
-      expect(urls.map((u) => u.url.toString()), [
-        _mirrorApk,
-        _githubApk,
-        'https://ghfast.top/$_githubApk',
-        'https://gh-proxy.com/$_githubApk',
-      ]);
-      expect(urls.first.label, 'dl.example.com');
+      expect(urls.last.url.toString(), 'https://dl.example.com/download/0.1.7/$_apk');
     });
 
-    test('a manifest from the mirror: its URL first, no duplicate', () {
-      final urls = sources.downloadUrls([Uri.parse(_mirrorApk), Uri.parse(_githubApk)]);
-      expect(urls.map((u) => u.url.toString()), [
-        _mirrorApk,
-        _githubApk,
-        'https://ghfast.top/$_githubApk',
-        'https://gh-proxy.com/$_githubApk',
+    test('replacing the accelerator list keeps it ahead of the OSS copy', () {
+      final sources = buildUpdateSources(accelerators: 'https://a.example/,https://b.example/');
+      expect(sources.mirrors.map((m) => m.id), ['custom0', 'custom1', 'dshgo']);
+      final urls = sources.downloadUrls([Uri.parse(_githubApk)]);
+      expect(urls.map((u) => u.url.toString()).take(3), [
+        'https://a.example/$_githubApk',
+        'https://b.example/$_githubApk',
+        _ossApk,
       ]);
     });
 
-    test('whatever worked last still moves to the front', () {
-      final urls = sources.downloadUrls([Uri.parse(_githubApk)], preferredMirror: 'github');
-      expect(urls.first.url.toString(), _githubApk);
-      expect(urls[1].url.toString(), _mirrorApk);
-    });
-
-    test('checksums go through the mirror too', () {
-      final sums = githubReleaseAsset('v0.9.0', checksumsName);
-      expect(sources.downloadUrls([sums]).first.url.toString(), '$_mirror/download/0.9.0/SHA256SUMS');
-    });
-
-    test('the mirror answers: its APK URL, nothing else asked', () async {
-      final manifest = jsonEncode({
-        'schema': 1,
-        'version': '0.9.0+10251518',
-        'tag': 'v0.9.0',
-        'assets': {
-          'arm64': {'name': _apk, 'size': 185254217, 'sha256': '1c' * 32, 'url': _mirrorApk},
-        },
-      });
-      final http = FakeHttp({_mirrorFeed: (_, _) => textResponse(manifest)});
-      final result = await UpdateChecker(http: http, sources: sources).check();
-      expect(http.urls, [_mirrorFeed]);
-      final found = result as CheckFound;
-      expect(found.endpoint.id, 'feed');
-      expect(found.release.apks[ApkFlavor.arm64]!.url.toString(), _mirrorApk);
-    });
-
-    test('the mirror is down or answers with an error page: GitHub answers', () async {
-      var http = FakeHttp({_manifest: (_, _) => textResponse(fixture('update.json'))});
-      var result = await UpdateChecker(http: http, sources: sources).check();
-      expect(http.urls, [_mirrorFeed, _manifest]);
-      expect((result as CheckFound).endpoint.id, 'manifest:github');
-
-      http = FakeHttp({
-        _mirrorFeed: (_, _) => textResponse('<html>502</html>', status: 502),
-        _manifest: (_, _) => textResponse(fixture('update.json')),
-      });
-      result = await UpdateChecker(http: http, sources: sources).check();
-      expect((result as CheckFound).endpoint.id, 'manifest:github');
-    });
-  });
-
-  group('the mirror only maps tagged release files', () {
-    final mirror = UpdateMirror.selfHosted(_mirror);
-
-    test('tag → version directory', () {
-      expect(
-        mirror.rewrite(githubReleaseAsset('v1.3.0-beta.1', 'dsh-go-1.3.0-beta.1-x64.apk')).toString(),
-        '$_mirror/download/1.3.0-beta.1/dsh-go-1.3.0-beta.1-x64.apk',
-      );
-    });
-
-    test('nothing else', () {
-      expect(mirror.rewrite(githubLatestAsset(updateManifestName)), isNull);
-      expect(mirror.rewrite(githubReleaseAsset('0.9.0', _apk)), isNull);
-      expect(mirror.rewrite(Uri.parse('https://github.com/someone/else/releases/download/v1.0.0/a.apk')), isNull);
-      expect(mirror.rewrite(Uri.parse(_mirrorApk)), isNull);
-    });
-  });
-
-  group('overrides', () {
-    test('another feed; downloads still try our copy first', () {
-      final sources = buildUpdateSources(feed: 'https://update.example.com/dsh/update.json');
-      expect(sources.feed.toString(), 'https://update.example.com/dsh/update.json');
-      expect(sources.metadataEndpoints().first.id, 'feed');
-      expect(sources.mirrors.first.id, 'dshgo');
-      expect(buildUpdateSources(feed: '').feed, isNull);
-      expect(buildUpdateSources(mirror: _mirror, feed: '').feed, isNull);
-    });
-
-    test('no copy at all: GitHub only, the API still last', () {
-      final sources = buildUpdateSources(mirror: '');
+    test('an empty feed define leaves only the GitHub-hosted manifests', () {
+      final sources = buildUpdateSources(feed: '');
       expect(sources.feed, isNull);
-      expect(sources.mirrors.map((m) => m.id), ['github', 'ghfast', 'gh-proxy']);
-      expect(sources.metadataEndpoints().map((e) => e.id), [
-        'manifest:github',
-        'manifest:ghfast',
-        'manifest:gh-proxy',
-        'api',
-      ]);
-    });
-
-    test('accelerators replaced or dropped', () {
-      expect(buildUpdateSources(accelerators: 'https://a.example/').mirrors.map((m) => m.id), [
-        'dshgo',
-        'github',
-        'custom0',
-      ]);
-      expect(buildUpdateSources(accelerators: '').mirrors.map((m) => m.id), ['dshgo', 'github']);
+      expect(sources.metadataEndpoints().map((e) => e.id),
+          ['manifest:ghproxy', 'manifest:ghfast', 'manifest:ghproxynet']);
     });
   });
 }

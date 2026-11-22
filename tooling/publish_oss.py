@@ -79,8 +79,11 @@ def prepare(dist: pathlib.Path, work: pathlib.Path) -> dict:
     return {
         "version": tag[1:],
         "bin": bin_path,
+        "apk": apk,
         "zip_name": zip_name,
         "manifest": manifest_path,
+        "title": manifest.get("title") or f"DSH Orb {tag[1:]}",
+        "notes": manifest.get("notes") or "",
     }
 
 
@@ -99,6 +102,27 @@ def upload(bin_path: pathlib.Path, manifest: pathlib.Path, version: str) -> None
     )
     bucket.put_object_from_file("app/update.json", str(manifest))
     print("uploaded manifest: app/update.json")
+
+
+GH_REPO = "mini-yifan/dsh-orb-android"
+
+
+def publish_github(tag: str, title: str, notes: str, files: list[pathlib.Path]) -> None:
+    """Upload the release assets GitHub serves the accelerator mirrors from."""
+    notes_path = pathlib.Path(tempfile.mkstemp(suffix=".md")[1])
+    notes_path.write_text(notes, encoding="utf-8")
+    common = ["--repo", GH_REPO]
+    # `gh` resolves the git remote to the upstream parent for forks, so the
+    # repository is always passed explicitly.
+    exists = subprocess.run(["gh", "release", "view", tag, *common], capture_output=True).returncode == 0
+    if exists:
+        subprocess.run(["gh", "release", "upload", tag, *common, "--clobber", *[str(f) for f in files]], check=True)
+        print(f"github: updated release {tag}")
+    else:
+        subprocess.run(["gh", "release", "create", tag, *common, "--title", title,
+                        "--notes-file", str(notes_path), *[str(f) for f in files]], check=True)
+        print(f"github: created release {tag}")
+    notes_path.unlink(missing_ok=True)
 
 
 def finalize(version: str, bin_name: str, zip_name: str) -> None:
@@ -143,6 +167,12 @@ def main() -> None:
             return
         upload(files["bin"], files["manifest"], files["version"])
         finalize(files["version"], files["bin"].name, files["zip_name"])
+        publish_github(
+            f"v{files['version']}",
+            files["title"],
+            files["notes"],
+            [files["bin"], files["apk"], files["manifest"]],
+        )
         print("done")
 
 
