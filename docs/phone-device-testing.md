@@ -66,7 +66,7 @@ export PATH=$HOME/development/platform-tools:$PATH
 
 ### 1.3 用哪个包（2026-11-20 起）
 
-现在只有**一个** App：`top.dshorb.app`，release 签名。以前那套「`.mesh` 测试包 + debug 签名、与原 DSH Go 并存」的做法已废弃——原因是 DSH Orb 已经与上游 dsh-go 分家，没有需要并存的「原 App」。
+现在只有**一个** App：`top.dshorb.app`，release 签名。以前那套「`.mesh` 测试包 + debug 签名、与原 DSH Orb 并存」的做法已废弃——原因是 DSH Orb 已经与上游 dsh-go 分家，没有需要并存的「原 App」。
 
 ```sh
 export DSH_APP=top.dshorb.app       # 正式包
@@ -484,7 +484,7 @@ JAVA_HOME=$JDK17 ANDROID_HOME=$ANDROID_SDK \
 
 ### 6.2 收尾
 
-恢复原 DSH Go：
+恢复原 DSH Orb：
 
 1. 打开原 App；
 2. 在系统设置里重新启用它的「DSH 手机操控」；
@@ -525,7 +525,7 @@ git grep -n -I -E \
 - App 版本：`0.1.2`（versionName），包名 `top.dshorb.app`
 - mesh 插件：`0.1.6`
 - 真机 runtime：`...-mesh0.1.6-f3d905d2e731-presets9`
-- 只装一个 App，没有并存的测试包；没有需要恢复的「原 DSH Go」
+- 只装一个 App，没有并存的测试包；没有需要恢复的「原 DSH Orb」
 
 配套文档：
 

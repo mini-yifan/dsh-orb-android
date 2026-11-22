@@ -1,6 +1,6 @@
 ---
 name: pr
-description: Open or update an internal pull request in ccch1mneyyy/dsh-Go, including writing or rewriting its description. Use for every PR the maintainer creates or edits here, and for /pr. External pull requests are not accepted (see AGENTS.md).
+description: Open or update an internal pull request in mini-yifan/dsh-orb-android, including writing or rewriting its description. Use for every PR the maintainer creates or edits here, and for /pr. External pull requests are not accepted (see AGENTS.md).
 ---
 
 Ship the current change as an internal pull request a reviewer can understand from the description alone: why it exists, the shape of the implementation, and what was actually verified. 外部 PR 一律不接受，本技能只用于维护者自己的分支。

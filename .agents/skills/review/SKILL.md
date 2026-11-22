@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Review or de-slop concrete changes in ccch1mneyyy/dsh-Go at maintainer level: branches, commit ranges, patch files, staged or unstaged worktrees, and scoped repository-hygiene requests. Use for evidence-first correctness, contract, repository-rule, process, and behavior-preserving cleanup review, including debug residue, dead or duplicate code, speculative abstractions, stale comments or tests, and unrelated diff churn. Do not use for abstract designs with no concrete repository artifact; use audit for repository-wide assessments and vuln-check for security-only checks."
+description: "Review or de-slop concrete changes in mini-yifan/dsh-orb-android at maintainer level: branches, commit ranges, patch files, staged or unstaged worktrees, and scoped repository-hygiene requests. Use for evidence-first correctness, contract, repository-rule, process, and behavior-preserving cleanup review, including debug residue, dead or duplicate code, speculative abstractions, stale comments or tests, and unrelated diff churn. Do not use for abstract designs with no concrete repository artifact; use audit for repository-wide assessments and vuln-check for security-only checks."
 ---
 
 # dsh-Go Deslop 与维护者审查

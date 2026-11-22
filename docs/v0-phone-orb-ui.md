@@ -411,13 +411,13 @@ adb shell am broadcast ... --es cmd bookmarks --ez show false
 ## 12. 实验方法（本轮由实现方确定）
 
 > 原则：每个实验只回答一个会影响实现的问题；有明确的通过标准和「不通过怎么办」。
-> 环境统一用测试包 `io.github.ccch1mneyyy.dsh_app.mesh`（不覆盖原 DSH Go），OnePlus 7 Pro / Android 12 / 90Hz；授予悬浮窗、无障碍、麦克风、通知；语音模型就绪；mesh 已配好 Mac + win32-asus。截图存 `docs/phone-eval/orb-ui/<实验>/`。每次实验前 `adb logcat -c`。
+> 环境统一用测试包 `io.github.ccch1mneyyy.dsh_app.mesh`（不覆盖原 DSH Orb），OnePlus 7 Pro / Android 12 / 90Hz；授予悬浮窗、无障碍、麦克风、通知；语音模型就绪；mesh 已配好 Mac + win32-asus。截图存 `docs/phone-eval/orb-ui/<实验>/`。每次实验前 `adb logcat -c`。
 
 ### E0 基线
 
-- 构建测试包（不覆盖原 App）：`./gradlew :app:assembleArm64Debug -PtestAppId=true`，产物 `app/build/app/outputs/apk/arm64/debug/app-arm64-debug.apk` 的包名是 `io.github.ccch1mneyyy.dsh_app.mesh`；`adb install -r` 覆盖安装测试包，原 DSH Go 不动。
+- 构建测试包（不覆盖原 App）：`./gradlew :app:assembleArm64Debug -PtestAppId=true`，产物 `app/build/app/outputs/apk/arm64/debug/app-arm64-debug.apk` 的包名是 `io.github.ccch1mneyyy.dsh_app.mesh`；`adb install -r` 覆盖安装测试包，原 DSH Orb 不动。
 - 安装测试包并确认：presets3、`orb-phone`、`device_agent`、`background_agent` 都在；悬浮球能显示。
-- 记录原 DSH Go 的服务状态；实验结束恢复（原 App 之前被 force-stop 过）。
+- 记录原 DSH Orb 的服务状态；实验结束恢复（原 App 之前被 force-stop 过）。
 - 通过：以上全绿；否则先修环境，不进实验。
 - 已知坑：APK 更新后无障碍 overlay 可能报 `BadTokenException`。当前实现会在失败后立刻改用应用层 overlay（`Settings.canDrawOverlays` 允许时），并在同一无障碍实例上 30 分钟内不再重试无障碍层；日志 `overlay add failed (accessibility): BadTokenException` 之后应能看到 `host=application`。
 
